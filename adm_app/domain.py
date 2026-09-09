@@ -67,6 +67,22 @@ def alert_info(row: dict, now: datetime | None = None) -> tuple[str, str]:
     return "NORMAL", "正常"
 
 
+def appeal_submission_name(row: dict) -> str:
+    if row.get("appeal_status") == 1:
+        return "不提交可结案"
+    if row.get("adm_status") in {1, 2} or row.get("appeal_status") == 0:
+        return "已提交"
+    return "待提交"
+
+
+def appeal_result_name(value) -> str:
+    if value == 0:
+        return "申诉成功"
+    if value == 1:
+        return "申诉失败"
+    return ""
+
+
 def serialize_task(row: dict, now: datetime | None = None) -> dict:
     code = stage_code(row)
     alert_level, alert_text = alert_info(row, now)
@@ -94,5 +110,12 @@ def serialize_task(row: dict, now: datetime | None = None) -> dict:
         "stageName": STAGE_NAMES[code],
         "alertLevel": alert_level,
         "alertText": alert_text,
+        "differenceDescription": text_value(row.get("diff_detail_reason")),
+        "confirmation": "",
+        "handlingProgress": "已录入差异" if text_value(row.get("diff_detail_reason")) else "未录入差异",
+        "appealSubmissionStatus": appeal_submission_name(row),
+        "appealReason": text_value(row.get("appeal_reason")),
+        "appealResultName": appeal_result_name(row.get("appeal_result")),
+        "resolution": text_value(row.get("resolution")),
         "updateTime": row.get("update_time"),
     }

@@ -19,7 +19,8 @@ TASK_COLUMNS = """
     id, adm_no, ota_code, ota_order_no, supplier_code, airline,
     ticket_no, ticket_count, total_amount, currency, supply_issue_date,
     adm_deadline, owner, actual_owner, lock_flag, adm_status,
-    appeal_status, appeal_result, create_time, update_time
+    appeal_status, appeal_result, diff_detail_reason, appeal_reason,
+    resolution, create_time, update_time
 """
 
 
@@ -243,7 +244,9 @@ class MockAdmRepository(AdmRepository):
             "supply_issue_date": updated.date(), "adm_deadline": deadline, "owner": owner,
             "actual_owner": actual_owner, "lock_flag": lock_flag, "adm_status": adm_status,
             "appeal_status": None, "appeal_result": None, "create_time": updated,
-            "update_time": updated, "status": 1,
+            "diff_detail_reason": "航司收回前期返点" if id_ % 2 else "",
+            "appeal_reason": "已提交航司政策及出票记录" if adm_status == 1 else "",
+            "resolution": "", "update_time": updated, "status": 1,
         }
 
     def health(self) -> dict:

@@ -57,4 +57,22 @@ def test_export_returns_valid_workbook(client):
     assert workbook.sheetnames == ["CTRIP"]
     sheet = workbook["CTRIP"]
     assert sheet.max_row >= 2
-    assert sheet["A1"].value == "携程订单号"
+    headers = [cell.value for cell in sheet[1]]
+    assert headers == [
+        "票号",
+        "ADM总金额（冗余汇总，= SUM(adm_details.amount)，方便列表排序展示）",
+        "主币种（CNY/USD/EUR等，明细行可不同币种时以明细为准）",
+        "供应下发日期",
+        "ADM最晚时限（回复截至时间）",
+        "差异说明",
+        "当前责任人（处理人，中间可转手，历史记录见flow_logs）",
+        "是否确认（部分不是我们的订单供应发错了/或者资料不齐全）",
+        "实际责任人",
+        "处理进度（是否录入差异）",
+        "申诉状态(已提交/待提交/不提交可结案)",
+        "申诉原因（status=申诉时必填）",
+        "申诉结果",
+        "结案处理结果（status=已结案时必填，如：已退款¥XXX / 差异已消化 / 关单无差异等）",
+    ]
+    assert sheet["H2"].value is None
+    assert sheet["J2"].value in {"已录入差异", "未录入差异"}

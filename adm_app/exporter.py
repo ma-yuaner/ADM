@@ -13,20 +13,20 @@ from openpyxl.utils import get_column_letter
 
 
 DEFAULT_COLUMNS = [
-    {"key": "admNo", "label": "ADM单号"},
-    {"key": "otaCode", "label": "数据源"},
-    {"key": "otaOrderNo", "label": "OTA订单号"},
-    {"key": "airline", "label": "航司"},
     {"key": "ticketNo", "label": "票号"},
-    {"key": "ticketCount", "label": "票号数量"},
-    {"key": "amount", "label": "ADM金额"},
-    {"key": "currency", "label": "币种"},
+    {"key": "amount", "label": "ADM总金额（冗余汇总，= SUM(adm_details.amount)，方便列表排序展示）"},
+    {"key": "currency", "label": "主币种（CNY/USD/EUR等，明细行可不同币种时以明细为准）"},
     {"key": "supplyIssueDate", "label": "供应下发日期"},
-    {"key": "deadline", "label": "申诉截止时间"},
-    {"key": "stageName", "label": "当前阶段"},
-    {"key": "alertText", "label": "预警"},
-    {"key": "owner", "label": "责任人"},
-    {"key": "actualOwner", "label": "实际处理人"},
+    {"key": "deadline", "label": "ADM最晚时限（回复截至时间）"},
+    {"key": "differenceDescription", "label": "差异说明"},
+    {"key": "owner", "label": "当前责任人（处理人，中间可转手，历史记录见flow_logs）"},
+    {"key": "confirmation", "label": "是否确认（部分不是我们的订单供应发错了/或者资料不齐全）"},
+    {"key": "actualOwner", "label": "实际责任人"},
+    {"key": "handlingProgress", "label": "处理进度（是否录入差异）"},
+    {"key": "appealSubmissionStatus", "label": "申诉状态(已提交/待提交/不提交可结案)"},
+    {"key": "appealReason", "label": "申诉原因（status=申诉时必填）"},
+    {"key": "appealResultName", "label": "申诉结果"},
+    {"key": "resolution", "label": "结案处理结果（status=已结案时必填，如：已退款¥XXX / 差异已消化 / 关单无差异等）"},
 ]
 
 
@@ -87,6 +87,10 @@ class ExcelExportService:
 
             for item in items:
                 sheet.append([self._cell_value(item.get(column["key"])) for column in columns])
+
+            for row in sheet.iter_rows(min_row=2):
+                for cell in row:
+                    cell.alignment = Alignment(vertical="top", wrap_text=True)
 
             sheet.freeze_panes = "A2"
             sheet.auto_filter.ref = sheet.dimensions
