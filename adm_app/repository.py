@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import re
 import sys
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -8,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import bindparam, create_engine, text
 from sqlalchemy.engine import Engine
 
 from .domain import alert_info, serialize_task, stage_code
@@ -22,6 +23,64 @@ TASK_COLUMNS = """
     appeal_status, appeal_result, diff_detail_reason, appeal_reason,
     resolution, create_time, update_time
 """
+
+FIELD_CHANGE_PATTERN = re.compile(
+    r"<b>(?P<field>.*?)</b>\s*由\s*'(?P<old>.*?)'\s*修改为\s*'(?P<new>.*?)'",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+TAG_PATTERN = re.compile(r"<[^>]+>")
+
+
+def _field_changes(value) -> list[tuple[str, str, str]]:
+    raw = html.unescape(str(value or ""))
+    changes = []
+    for match in FIELD_CHANGE_PATTERN.finditer(raw):
+        changes.append(tuple(
+            TAG_PATTERN.sub("", match.group(name)).strip()
+            for name in ("field", "old", "new")
+        ))
+    return changes
+
+
+def attach_transfer_history(rows: list[dict], logs: list[dict]) -> None:
+    """把操作日志中的实际责任人变化和转单后首次锁单信息写回ADM行。"""
+    events: dict[int, dict] = {}
+    for log in logs:
+        adm_id = int(log["business_obj_id"])
+        event = events.setdefault(adm_id, {"transfers": [], "locks": []})
+        event_time = log.get("operator_datetime")
+        if not isinstance(event_time, datetime):
+            continue
+        for field, old_value, new_value in _field_changes(log.get("operator_content")):
+            if field == "实际责任人" and old_value != new_value and new_value:
+                event["transfers"].append({
+                    "time": event_time,
+                    "from": old_value,
+                    "to": new_value,
+                    "operator": str(log.get("operator_name") or "").strip(),
+                })
+            elif field == "锁状态" and new_value == "已锁定":
+                event["locks"].append(event_time)
+
+    for row in rows:
+        history = events.get(int(row["id"]), {"transfers": [], "locks": []})
+        transfers = sorted(history["transfers"], key=lambda item: item["time"])
+        last_transfer = transfers[-1] if transfers else None
+        post_transfer_lock = None
+        if last_transfer:
+            post_transfer_lock = next(
+                (value for value in sorted(history["locks"]) if value > last_transfer["time"]),
+                None,
+            )
+        row.update({
+            "transfer_count": len(transfers),
+            "last_transfer_time": last_transfer["time"] if last_transfer else None,
+            "last_transfer_from": last_transfer["from"] if last_transfer else "",
+            "last_transfer_to": last_transfer["to"] if last_transfer else "",
+            "last_transfer_operator": last_transfer["operator"] if last_transfer else "",
+            "post_transfer_lock_time": post_transfer_lock,
+            "transfer_awaiting_acceptance": bool(last_transfer and not post_transfer_lock),
+        })
 
 
 class AdmRepository(ABC):
@@ -109,6 +168,24 @@ class MySQLAdmRepository(AdmRepository):
         sql = text(f"SELECT {TASK_COLUMNS} FROM adm_records WHERE {where_sql} ORDER BY adm_deadline IS NULL, adm_deadline, id DESC")
         with self.engine.connect() as connection:
             rows = [dict(row._mapping) for row in connection.execute(sql, params)]
+            if rows:
+                log_sql = text(
+                    """
+                    SELECT id, business_obj_id, operator_datetime,
+                           operator_name, operator_content
+                    FROM auto_issue_operator_log
+                    WHERE business_obj = 'AdmRecords'
+                      AND business_obj_id IN :adm_ids
+                      AND (operator_content LIKE '%实际责任人%'
+                           OR operator_content LIKE '%锁状态%')
+                    ORDER BY business_obj_id, operator_datetime, id
+                    """
+                ).bindparams(bindparam("adm_ids", expanding=True))
+                logs = [
+                    dict(log._mapping)
+                    for log in connection.execute(log_sql, {"adm_ids": [row["id"] for row in rows]})
+                ]
+                attach_transfer_history(rows, logs)
 
         tasks = [serialize_task(row) for row in rows]
         if filters.get("alert"):
@@ -247,6 +324,10 @@ class MockAdmRepository(AdmRepository):
             "diff_detail_reason": "航司收回前期返点" if id_ % 2 else "",
             "appeal_reason": "已提交航司政策及出票记录" if adm_status == 1 else "",
             "resolution": "", "update_time": updated, "status": 1,
+            "transfer_count": 0, "last_transfer_time": None,
+            "last_transfer_from": "", "last_transfer_to": "",
+            "last_transfer_operator": "", "post_transfer_lock_time": None,
+            "transfer_awaiting_acceptance": False,
         }
 
     def health(self) -> dict:
@@ -309,8 +390,17 @@ class MockAdmRepository(AdmRepository):
             elif row.get("actual_owner") == actual_owner:
                 skipped.append({"id": adm_id, "reason": "实际处理人未变化"})
             else:
+                old_owner = row.get("actual_owner") or ""
+                now = datetime.now().replace(microsecond=0)
                 row["actual_owner"] = actual_owner
-                row["update_time"] = datetime.now()
+                row["update_time"] = now
+                row["transfer_count"] = int(row.get("transfer_count") or 0) + 1
+                row["last_transfer_time"] = now
+                row["last_transfer_from"] = old_owner
+                row["last_transfer_to"] = actual_owner
+                row["last_transfer_operator"] = actor
+                row["post_transfer_lock_time"] = None
+                row["transfer_awaiting_acceptance"] = True
                 updated.append(adm_id)
         return {"updatedIds": updated, "updatedCount": len(updated), "skipped": skipped}
 

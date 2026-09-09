@@ -82,6 +82,10 @@ function renderPeople(defaultPerson) {
 function renderTasks(data) {
   const rows = data.items.map(task => {
     const badgeClass = task.alertLevel === "P0" ? "badge-p0" : task.alertLevel === "P1" ? "badge-p1" : task.alertLevel === "P2" ? "badge-p2" : "badge-normal";
+    const transferClass = task.transferAwaitingAcceptance ? "transfer-pending" : (task.transferStatus === "新转入" ? "transfer-new" : "");
+    const transferCell = task.lastTransferTime
+      ? `<span class="transfer-cell ${transferClass}"><strong>${escapeHtml(task.transferStatus)}</strong><span>${escapeHtml(formatDateTime(task.lastTransferTime))}</span><small>${escapeHtml(task.lastTransferFrom || "未分配")} → ${escapeHtml(task.lastTransferTo || task.actualOwner || "未分配")} · 共${Number(task.transferCount || 0)}次</small></span>`
+      : `<span class="muted-text">未发生转单</span>`;
     return `<tr data-id="${task.id}">
       <td><input class="row-check" type="checkbox" aria-label="选择${escapeHtml(task.admNo)}" ${state.selected.has(task.id) ? "checked" : ""}></td>
       <td><span class="badge ${badgeClass}">${escapeHtml(task.alertLevel === "NORMAL" ? "正常" : task.alertLevel)} · ${escapeHtml(task.alertText)}</span></td>
@@ -93,6 +97,7 @@ function renderTasks(data) {
       <td>${escapeHtml(formatDateTime(task.deadline))}</td>
       <td>${escapeHtml(task.stageName)}</td>
       <td><span class="owner-cell"><span>${escapeHtml(task.owner || "未分配")}</span><small>实际：${escapeHtml(task.actualOwner || "未分配")}</small></span></td>
+      <td>${transferCell}</td>
       <td><button class="row-action" type="button" ${state.writeEnabled ? `data-transfer="${task.id}"` : "disabled"}>${state.writeEnabled ? "快速转单" : "只读"}</button></td>
     </tr>`;
   }).join("");

@@ -25,6 +25,10 @@ DEFAULT_COLUMNS = [
     {"key": "owner", "label": "当前责任人"},
     {"key": "confirmation", "label": "是否确认"},
     {"key": "actualOwner", "label": "实际责任人"},
+    {"key": "lastTransferTime", "label": "最近转单时间"},
+    {"key": "lastTransferFrom", "label": "转单前责任人"},
+    {"key": "transferCount", "label": "转单次数"},
+    {"key": "transferStatus", "label": "转单状态"},
     {"key": "handlingProgress", "label": "处理进度"},
     {"key": "appealSubmissionStatus", "label": "申诉状态"},
     {"key": "appealReason", "label": "申诉原因"},
@@ -108,6 +112,13 @@ class ExcelExportService:
             index for index, column in enumerate(columns, start=1)
             if column["key"] == "confirmation"
         )
+        transfer_status_column = next(
+            (
+                index for index, column in enumerate(columns, start=1)
+                if column["key"] == "transferStatus"
+            ),
+            None,
+        )
         for row_index, (item, row) in enumerate(
             zip(tasks, sheet.iter_rows(min_row=data_start_row)),
             start=data_start_row,
@@ -128,6 +139,10 @@ class ExcelExportService:
             row[input_column - 1].alignment = Alignment(
                 horizontal="center", vertical="center", wrap_text=True
             )
+            if transfer_status_column and item.get("transferStatus") == "转单后未接单":
+                transfer_cell = row[transfer_status_column - 1]
+                transfer_cell.fill = PatternFill("solid", fgColor="FFF2B2")
+                transfer_cell.font = Font(name="微软雅黑", size=10, bold=True, color="9D6200")
             sheet.row_dimensions[row_index].height = 30
 
         sheet.freeze_panes = f"A{data_start_row}"
@@ -157,6 +172,8 @@ class ExcelExportService:
             "ticketNo": 20, "amount": 14, "currency": 10,
             "supplyIssueDate": 14, "deadline": 19, "differenceDescription": 32,
             "owner": 14, "confirmation": 15, "actualOwner": 14,
+            "lastTransferTime": 19, "lastTransferFrom": 14,
+            "transferCount": 10, "transferStatus": 17,
             "handlingProgress": 15, "appealSubmissionStatus": 18,
             "appealReason": 32, "appealResultName": 14, "resolution": 32,
         }
@@ -164,7 +181,7 @@ class ExcelExportService:
             width = preferred_widths.get(column["key"], 15)
             sheet.column_dimensions[get_column_letter(column_index)].width = width
             key = column["key"]
-            if key in {"deadline", "updateTime"}:
+            if key in {"deadline", "lastTransferTime", "updateTime"}:
                 for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "yyyy-mm-dd hh:mm"
             elif key == "supplyIssueDate":

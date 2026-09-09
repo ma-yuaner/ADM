@@ -65,7 +65,7 @@ h1 { margin: 0; font-size: 20px; font-weight: 600; }
 .message-error { color: var(--danger); background: var(--danger-soft); }
 .message-success { color: var(--success); background: var(--success-soft); }
 .table-wrap { overflow-x: auto; }
-table { width: 100%; min-width: 1160px; border-collapse: collapse; }
+table { width: 100%; min-width: 1420px; border-collapse: collapse; }
 th { padding: 11px 10px; text-align: left; color: var(--muted); background: var(--surface-soft); font-size: 11px; font-weight: 600; white-space: nowrap; }
 td { padding: 12px 10px; border-top: 1px solid var(--line); font-size: 12px; vertical-align: middle; }
 tbody tr:hover { background: var(--surface-soft); }
@@ -77,6 +77,13 @@ tbody tr:hover { background: var(--surface-soft); }
 .badge-normal { color: var(--success); background: var(--success-soft); }
 .owner-cell { display: grid; gap: 2px; }
 .owner-cell small { color: var(--muted); }
+.transfer-cell { display: grid; gap: 2px; min-width: 185px; }
+.transfer-cell strong { color: var(--muted); font-size: 11px; font-weight: 600; }
+.transfer-cell span, .transfer-cell small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.transfer-cell.transfer-new strong { color: var(--brand); }
+.transfer-cell.transfer-pending { padding: 6px 8px; border-radius: 8px; background: var(--warning-soft); }
+.transfer-cell.transfer-pending strong { color: var(--warning); }
+.muted-text { color: var(--muted); font-size: 11px; }
 .row-action { padding: 5px; border: 0; color: var(--brand); background: transparent; cursor: pointer; }
 .empty-state { padding: 32px 16px; color: var(--muted); text-align: center; }
 .table-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }

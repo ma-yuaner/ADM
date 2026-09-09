@@ -38,6 +38,10 @@ def test_assign_updates_mock_repository(client):
 
     tasks = client.get("/api/tasks?scope=mine&person=李志君").get_json()["data"]["items"]
     assert {101, 104}.issubset({item["id"] for item in tasks})
+    transferred = next(item for item in tasks if item["id"] == 101)
+    assert transferred["transferCount"] == 1
+    assert transferred["lastTransferTo"] == "李志君"
+    assert transferred["transferStatus"] == "转单后未接单"
 
 
 def test_assign_rejects_invalid_ids(client):
@@ -75,6 +79,10 @@ def test_export_returns_valid_workbook(client):
         "当前责任人",
         "是否确认",
         "实际责任人",
+        "最近转单时间",
+        "转单前责任人",
+        "转单次数",
+        "转单状态",
         "处理进度",
         "申诉状态",
         "申诉原因",
@@ -82,7 +90,7 @@ def test_export_returns_valid_workbook(client):
         "结案处理结果",
     ]
     assert sheet["L5"].value is None
-    assert sheet["N5"].value in {"已录入差异", "未录入差异"}
+    assert sheet["R5"].value in {"已录入差异", "未录入差异"}
     assert len(sheet.data_validations.dataValidation) == 1
 
 

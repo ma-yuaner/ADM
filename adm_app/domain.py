@@ -84,11 +84,25 @@ def appeal_result_name(value) -> str:
 
 
 def serialize_task(row: dict, now: datetime | None = None) -> dict:
+    now = now or datetime.now()
     code = stage_code(row)
     alert_level, alert_text = alert_info(row, now)
     amount = row.get("total_amount")
     if isinstance(amount, Decimal):
         amount = float(amount)
+    last_transfer_time = row.get("last_transfer_time")
+    transfer_count = int(row.get("transfer_count") or 0)
+    transfer_waiting = bool(row.get("transfer_awaiting_acceptance"))
+    transfer_age_hours = None
+    transfer_status = ""
+    if isinstance(last_transfer_time, datetime):
+        transfer_age_hours = round(max(0, (now - last_transfer_time).total_seconds() / 3600), 2)
+        if transfer_waiting:
+            transfer_status = "转单后未接单"
+        elif transfer_age_hours <= 24:
+            transfer_status = "新转入"
+        else:
+            transfer_status = "已接单"
     return {
         "id": int(row["id"]),
         "admNo": text_value(row.get("adm_no")),
@@ -105,6 +119,15 @@ def serialize_task(row: dict, now: datetime | None = None) -> dict:
         "owner": text_value(row.get("owner")),
         "actualOwner": text_value(row.get("actual_owner")),
         "primaryOwner": text_value(row.get("actual_owner")) or text_value(row.get("owner")),
+        "transferCount": transfer_count,
+        "lastTransferTime": last_transfer_time,
+        "lastTransferFrom": text_value(row.get("last_transfer_from")),
+        "lastTransferTo": text_value(row.get("last_transfer_to")),
+        "lastTransferOperator": text_value(row.get("last_transfer_operator")),
+        "postTransferLockTime": row.get("post_transfer_lock_time"),
+        "transferAwaitingAcceptance": transfer_waiting,
+        "transferAgeHours": transfer_age_hours,
+        "transferStatus": transfer_status,
         "lockFlag": int(row.get("lock_flag") or 0),
         "stageCode": code,
         "stageName": STAGE_NAMES[code],
