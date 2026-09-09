@@ -128,6 +128,8 @@ curl http://127.0.0.1:5050/api/health
 
 默认Docker Compose使用mock数据。
 
+服务器从GitLab拉取源码、配置真实数据库并启动的完整命令，见[部署说明](docs/deployment.md#零从gitlab拉取源码直接启动测试服务器最简单方式)。
+
 ## 接口
 
 | 方法 | 地址 | 说明 |

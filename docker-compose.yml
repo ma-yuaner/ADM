@@ -5,9 +5,24 @@ services:
     image: adm-assignment-demo:local
     container_name: adm-assignment-demo
     environment:
-      ADM_DATA_MODE: mock
-      ADM_WRITE_ENABLED: "false"
-      ADM_DEFAULT_PERSON: 黄娜娟
+      ADM_DATA_MODE: ${ADM_DATA_MODE:-mock}
+      ADM_WRITE_ENABLED: ${ADM_WRITE_ENABLED:-false}
+      ADM_DEFAULT_PERSON: ${ADM_DEFAULT_PERSON:-黄娜娟}
+      ADM_OPERATOR_ID: ${ADM_OPERATOR_ID:-0}
+      ADM_DB_HOST: ${ADM_DB_HOST:-}
+      ADM_DB_PORT: ${ADM_DB_PORT:-3306}
+      ADM_DB_USER: ${ADM_DB_USER:-}
+      ADM_DB_PASSWORD: ${ADM_DB_PASSWORD:-}
+      ADM_DB_DATABASE: ${ADM_DB_DATABASE:-sibedb}
+      ADM_LOG_LEVEL: ${ADM_LOG_LEVEL:-INFO}
     ports:
-      - "5050:5050"
+      - "${ADM_HTTP_PORT:-5050}:5050"
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5050/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

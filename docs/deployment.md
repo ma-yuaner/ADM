@@ -1,5 +1,48 @@
 # ADM分配工作台部署说明
 
+## 零、从GitLab拉取源码直接启动（测试服务器最简单方式）
+
+```bash
+cd /opt
+git clone https://git.ndccloud.com/analytics/adm.git adm-assignment-demo
+cd /opt/adm-assignment-demo
+cp .env.example .env
+```
+
+编辑`.env`，测试服务器连接真实库时至少配置：
+
+```env
+ADM_DATA_MODE=mysql
+ADM_WRITE_ENABLED=false
+ADM_DEFAULT_PERSON=黄娜娟
+ADM_DB_HOST=数据库地址
+ADM_DB_PORT=3306
+ADM_DB_USER=数据库用户
+ADM_DB_PASSWORD=数据库密码
+ADM_DB_DATABASE=sibedb
+ADM_HTTP_PORT=5050
+```
+
+启动并验证：
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100 adm-assignment-demo
+curl http://127.0.0.1:5050/api/health
+```
+
+后续更新：
+
+```bash
+cd /opt/adm-assignment-demo
+git pull origin main
+docker compose up -d --build
+curl http://127.0.0.1:5050/api/health
+```
+
+浏览器访问`http://测试服务器IP:5050`。如果其他电脑无法访问，需要开放服务器TCP 5050端口，或按本文Nginx示例配置内网域名。
+
 ## 一、仓库安排
 
 建议把`adm_assignment_demo`目录作为独立Git仓库：
