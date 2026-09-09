@@ -7,7 +7,7 @@
 - 我的待办、团队待办、全部未结案；
 - 按数据源、预警等级、订单号筛选；
 - 单张快速转单、批量分配实际处理人；
-- 按`ota_code`套用字段配置并导出Excel；
+- 将筛选后的不同平台数据统一导出到一个Excel工作表；
 - 不新增数据库表，复用`adm_records`和`auto_issue_operator_log`。
 
 ## 技术结构
@@ -108,7 +108,7 @@ owner = 当前负责人
 
 配置文件：`config/export_profiles.json`。
 
-配置键对应`adm_records.ota_code`。未单独配置的数据源使用`DEFAULT`列；一次导出包含多个数据源时，每个数据源一个Sheet。
+`DEFAULT.columns`定义统一导出字段及顺序；一次导出的不同平台数据全部放在`ADM待处理`工作表，并保留“平台”字段。
 
 ## 自动测试
 
@@ -139,7 +139,7 @@ curl http://127.0.0.1:5050/api/health
 | GET | `/api/people` | 可选择人员 |
 | GET | `/api/tasks` | ADM待办列表和统计卡 |
 | POST | `/api/assign` | 批量分配实际处理人 |
-| GET | `/api/export` | 导出数据源Excel |
+| GET | `/api/export` | 导出统一格式Excel |
 
 列表参数：
 
