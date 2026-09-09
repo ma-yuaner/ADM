@@ -61,8 +61,6 @@ class WeComRobotService:
             mapping = {"mobile": mapping}
         user_id = str(mapping.get("user_id") or "").strip()
         mobile = str(mapping.get("mobile") or "").strip()
-        if not user_id and not mobile:
-            raise AppError(f"{person}未配置企业微信user_id或手机号，已取消发送", 400)
         text_payload = {
             "msgtype": "text",
             "text": {

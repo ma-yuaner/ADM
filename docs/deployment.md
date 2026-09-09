@@ -31,7 +31,7 @@ ADM_WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=机�
 ADM_WECOM_PEOPLE_JSON={"黄娜娟":{"mobile":"企业微信手机号"},"李志君":{"user_id":"企业微信user_id"}}
 ```
 
-该方式发送到机器人所在群并@对应人员，不是企业微信一对一私聊。未配置人员手机号或user_id时，系统会阻止发送。
+该方式发送到机器人所在群，不是企业微信一对一私聊。人员手机号或user_id是可选配置：未配置时仍会发送并在正文写明处理人，配置后会额外@本人。页面只有人工点击并确认后才会发送。
 
 启动并验证：
 

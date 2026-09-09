@@ -178,6 +178,6 @@ ADM_WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=机�
 ADM_WECOM_PEOPLE_JSON={"黄娜娟":{"mobile":"企业微信手机号"},"李志君":{"user_id":"企业微信user_id"}}
 ```
 
-人员姓名必须与页面下拉框完全一致。没有人员映射时系统会取消发送，不会把无人接收的附件发到群里。
+人员姓名必须与页面下拉框完全一致。人员映射可选：未配置时仍会把清单发送到机器人所在群，并在正文写明处理人；配置后会额外@本人。页面只有人工点击并确认后才会发送，不包含自动定时推送。
 
 部署与GitLab CI/CD见[部署说明](docs/deployment.md)。
