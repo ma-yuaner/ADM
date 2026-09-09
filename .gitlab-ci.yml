@@ -1,0 +1,52 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  IMAGE_TAG: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+  DOCKER_TLS_CERTDIR: "/certs"
+
+test:
+  stage: test
+  image: python:3.12-slim
+  script:
+    - pip install --no-cache-dir -r requirements-dev.txt
+    - pytest -q
+
+build_image:
+  stage: build
+  image: docker:27-cli
+  services:
+    - name: docker:27-dind
+      alias: docker
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+  script:
+    - docker build --pull -t "$IMAGE_TAG" -t "$CI_REGISTRY_IMAGE:latest" .
+    - docker push "$IMAGE_TAG"
+    - docker push "$CI_REGISTRY_IMAGE:latest"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy_test:
+  stage: deploy
+  image: alpine:3.21
+  needs: ["build_image"]
+  before_script:
+    - apk add --no-cache openssh-client
+    - install -m 700 -d ~/.ssh
+    - printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - echo "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+  script:
+    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
+    - scp docker-compose.prod.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.prod.yml"
+    - printf '%s' "$REGISTRY_DEPLOY_PASSWORD" | ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker login '$CI_REGISTRY' -u '$REGISTRY_DEPLOY_USER' --password-stdin"
+    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && export ADM_IMAGE='$IMAGE_TAG' && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d --remove-orphans"
+    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "sleep 5 && curl -fsS http://127.0.0.1:5050/api/health"
+  environment:
+    name: test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual

@@ -1,0 +1,44 @@
+{
+  "DEFAULT": {
+    "columns": [
+      {"key": "admNo", "label": "ADM单号"},
+      {"key": "otaCode", "label": "数据源"},
+      {"key": "otaOrderNo", "label": "OTA订单号"},
+      {"key": "airline", "label": "航司"},
+      {"key": "ticketNo", "label": "票号"},
+      {"key": "ticketCount", "label": "票号数量"},
+      {"key": "amount", "label": "ADM金额"},
+      {"key": "currency", "label": "币种"},
+      {"key": "supplyIssueDate", "label": "供应下发日期"},
+      {"key": "deadline", "label": "申诉截止时间"},
+      {"key": "stageName", "label": "当前阶段"},
+      {"key": "alertText", "label": "预警"},
+      {"key": "owner", "label": "责任人"},
+      {"key": "actualOwner", "label": "实际处理人"}
+    ]
+  },
+  "CTRIP": {
+    "columns": [
+      {"key": "otaOrderNo", "label": "携程订单号"},
+      {"key": "admNo", "label": "ADM单号"},
+      {"key": "ticketNo", "label": "票号"},
+      {"key": "airline", "label": "航司"},
+      {"key": "amount", "label": "ADM金额"},
+      {"key": "currency", "label": "币种"},
+      {"key": "deadline", "label": "申诉截止时间"},
+      {"key": "actualOwner", "label": "实际处理人"}
+    ]
+  },
+  "QUNAR": {
+    "columns": [
+      {"key": "otaOrderNo", "label": "去哪儿订单号"},
+      {"key": "admNo", "label": "ADM单号"},
+      {"key": "ticketNo", "label": "票号"},
+      {"key": "airline", "label": "航司"},
+      {"key": "amount", "label": "ADM金额"},
+      {"key": "currency", "label": "币种"},
+      {"key": "deadline", "label": "申诉截止时间"},
+      {"key": "actualOwner", "label": "实际处理人"}
+    ]
+  }
+}

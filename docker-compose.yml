@@ -1,0 +1,13 @@
+services:
+  adm-assignment-demo:
+    build:
+      context: .
+    image: adm-assignment-demo:local
+    container_name: adm-assignment-demo
+    environment:
+      ADM_DATA_MODE: mock
+      ADM_WRITE_ENABLED: "false"
+      ADM_DEFAULT_PERSON: 黄娜娟
+    ports:
+      - "5050:5050"
+    restart: unless-stopped

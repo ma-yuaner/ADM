@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADM分配工作台</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">ADM</div>
+        <div>
+          <h1>ADM分配工作台</h1>
+          <div class="subtitle">待办识别、快速分配、数据源Excel导出</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span id="environment-badge" class="environment-badge">正在连接</span>
+        <span id="sync-time" class="sync-time">数据更新：--</span>
+        <label class="field persona">
+          <span>当前查看人员</span>
+          <select id="person-select" aria-label="当前查看人员"></select>
+        </label>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div id="error-banner" class="message message-error" role="alert" hidden></div>
+      <section class="intro">
+        <div>
+          <h2 id="view-title">团队ADM待办</h2>
+          <p id="view-description">查看该负责人名下的未结案ADM，并批量分配实际处理人。</p>
+        </div>
+        <div class="view-tabs" role="tablist" aria-label="待办视图">
+          <button type="button" class="view-tab" data-scope="mine" role="tab" aria-selected="false">我的待办</button>
+          <button type="button" class="view-tab active" data-scope="team" role="tab" aria-selected="true">团队待办</button>
+          <button type="button" class="view-tab" data-scope="all" role="tab" aria-selected="false">全部未结案</button>
+        </div>
+      </section>
+
+      <section class="stats" aria-label="待办概览">
+        <article class="stat"><span>当前未结案</span><strong id="stat-open">--</strong><small>当前查看范围</small></article>
+        <article class="stat"><span>未分配实际处理人</span><strong id="stat-unassigned">--</strong><small>需要负责人分配</small></article>
+        <article class="stat"><span>已分配</span><strong id="stat-assigned">--</strong><small>已明确处理人员</small></article>
+        <article class="stat danger"><span>超过申诉截止时间</span><strong id="stat-overdue">--</strong><small>优先处理</small></article>
+        <article class="stat warning"><span>24小时内到期</span><strong id="stat-due">--</strong><small>今日需要关注</small></article>
+      </section>
+
+      <section class="workspace">
+        <div class="toolbar">
+          <div class="filters">
+            <label class="field"><span>数据源</span><select id="source-filter"><option value="">全部数据源</option></select></label>
+            <label class="field"><span>预警等级</span><select id="alert-filter"><option value="">全部等级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="NORMAL">正常</option></select></label>
+            <label class="field search-field"><span>查找订单</span><input id="search-input" type="search" placeholder="ADM单号 / OTA订单号 / 票号"></label>
+            <button id="search-button" class="button" type="button">查询</button>
+          </div>
+          <div class="actions">
+            <button id="batch-assign-button" class="button button-primary" type="button" disabled>批量分配</button>
+            <button id="export-button" class="button" type="button">按数据源导出Excel</button>
+          </div>
+        </div>
+
+        <div id="selection-bar" class="selection-bar" hidden>
+          已选择 <strong id="selected-count">0</strong> 张ADM，可批量分配给同一处理人。
+        </div>
+        <div id="success-message" class="message message-success" role="status" hidden></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th><input id="select-all" type="checkbox" aria-label="选择当前页全部订单"></th>
+                <th>预警</th><th>ADM单号</th><th>数据源</th><th>OTA订单号</th><th>航司</th><th>金额</th><th>申诉截止时间</th><th>当前阶段</th><th>负责人 / 实际处理人</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="task-body"></tbody>
+          </table>
+          <div id="loading" class="empty-state">正在加载待办数据...</div>
+          <div id="empty-state" class="empty-state" hidden>没有符合条件的未结案ADM</div>
+        </div>
+
+        <footer class="table-footer">
+          <span id="result-count">共0条</span>
+          <div class="pager">
+            <button id="previous-page" class="button button-small" type="button">上一页</button>
+            <span id="page-label">第1页</span>
+            <button id="next-page" class="button button-small" type="button">下一页</button>
+          </div>
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="assign-dialog">
+    <form method="dialog" id="assign-form">
+      <div class="dialog-head">
+        <h3>分配实际处理人</h3>
+        <p id="assign-description">将选中的ADM分配给指定人员。</p>
+      </div>
+      <div class="dialog-body">
+        <label class="field"><span>实际处理人</span><select id="assignee-select" required></select></label>
+        <p class="dialog-note">分配后将更新原ADM记录，并生成“实际责任人”修改日志。</p>
+        <div class="dialog-actions">
+          <button id="assign-cancel" class="button" type="button">取消</button>
+          <button class="button button-primary" type="submit">确认分配</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>
