@@ -8,6 +8,7 @@
 - 按数据源、预警等级、订单号筛选；
 - 单张快速转单、批量分配实际处理人；
 - 将筛选后的不同平台数据统一导出到一个Excel工作表；
+- 向企业微信群发送所选人员的全部未结案ADM清单并@本人；
 - 不新增数据库表，复用`adm_records`和`auto_issue_operator_log`。
 
 ## 技术结构
@@ -164,5 +165,19 @@ pageSize=20
 ```
 
 当前版本不登录，`actor`来自页面选择的“当前查看人员”。因此测试环境可用于业务流程确认，但不能把它当成可信的身份认证或考核依据。
+
+## 企业微信发送
+
+当前实现使用企业微信群机器人：先发送人员、未结案数量和提醒文字，再上传美化后的Excel，并通过企业微信user_id或手机号@所选人员。它不是一对一私聊。
+
+服务器`.env`配置示例：
+
+```env
+ADM_WECOM_SEND_ENABLED=true
+ADM_WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=机器人key
+ADM_WECOM_PEOPLE_JSON={"黄娜娟":{"mobile":"企业微信手机号"},"李志君":{"user_id":"企业微信user_id"}}
+```
+
+人员姓名必须与页面下拉框完全一致。没有人员映射时系统会取消发送，不会把无人接收的附件发到群里。
 
 部署与GitLab CI/CD见[部署说明](docs/deployment.md)。

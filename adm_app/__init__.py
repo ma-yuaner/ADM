@@ -9,6 +9,7 @@ from .api import api
 from .config import AppConfig
 from .errors import AppError
 from .repository import create_repository
+from .wecom import WeComRobotService
 
 
 def create_app(config_overrides: dict | None = None) -> Flask:
@@ -27,6 +28,12 @@ def create_app(config_overrides: dict | None = None) -> Flask:
 
     repository = app.config.get("REPOSITORY") or create_repository(app.config, project_dir)
     app.extensions["adm_repository"] = repository
+    app.extensions["wecom_service"] = app.config.get("WECOM_SERVICE") or WeComRobotService(
+        app.config["WECOM_SEND_ENABLED"],
+        app.config["WECOM_WEBHOOK_URL"],
+        app.config["WECOM_PEOPLE_FILE"],
+        app.config["WECOM_PEOPLE_JSON"],
+    )
     app.register_blueprint(api)
 
     @app.get("/")

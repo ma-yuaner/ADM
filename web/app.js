@@ -7,13 +7,15 @@ const state = {
   people: [],
   selected: new Set(),
   singleTarget: null,
+  writeEnabled: false,
+  wecomEnabled: false,
 };
 
 const elements = Object.fromEntries([
   "environment-badge", "sync-time", "person-select", "view-title", "view-description",
   "stat-open", "stat-unassigned", "stat-assigned", "stat-overdue", "stat-due",
   "source-filter", "alert-filter", "search-input", "search-button", "batch-assign-button",
-  "export-button", "selection-bar", "selected-count", "success-message", "error-banner",
+  "export-button", "wecom-send-button", "selection-bar", "selected-count", "success-message", "error-banner",
   "select-all", "task-body", "loading", "empty-state", "result-count", "previous-page",
   "next-page", "page-label", "assign-dialog", "assign-form", "assign-description",
   "assignee-select", "assign-cancel",
@@ -91,7 +93,7 @@ function renderTasks(data) {
       <td>${escapeHtml(formatDateTime(task.deadline))}</td>
       <td>${escapeHtml(task.stageName)}</td>
       <td><span class="owner-cell"><span>${escapeHtml(task.owner || "未分配")}</span><small>实际：${escapeHtml(task.actualOwner || "未分配")}</small></span></td>
-      <td><button class="row-action" type="button" data-transfer="${task.id}">快速转单</button></td>
+      <td><button class="row-action" type="button" ${state.writeEnabled ? `data-transfer="${task.id}"` : "disabled"}>${state.writeEnabled ? "快速转单" : "只读"}</button></td>
     </tr>`;
   }).join("");
   elements["task-body"].innerHTML = rows;
@@ -136,7 +138,7 @@ async function loadTasks() {
 function updateSelection() {
   elements["selected-count"].textContent = state.selected.size;
   elements["selection-bar"].hidden = state.selected.size === 0;
-  elements["batch-assign-button"].disabled = state.selected.size === 0;
+  elements["batch-assign-button"].disabled = !state.writeEnabled || state.selected.size === 0;
 }
 
 function openAssign(ids) {
@@ -151,9 +153,15 @@ async function initialize() {
   try {
     const [config, people, health] = await Promise.all([api("/api/config"), api("/api/people"), api("/api/health")]);
     state.people = people.items;
+    state.writeEnabled = Boolean(health.writeEnabled);
+    state.wecomEnabled = Boolean(config.wecomEnabled);
     renderPeople(config.defaultPerson);
     elements["environment-badge"].textContent = health.dataMode === "mock" ? "演示数据" : (health.writeEnabled ? "数据库已连接 · 可写" : "数据库已连接 · 只读");
     elements["environment-badge"].classList.toggle("live", health.dataMode !== "mock");
+    elements["wecom-send-button"].disabled = !state.wecomEnabled;
+    elements["wecom-send-button"].title = state.wecomEnabled
+      ? "发送该人员全部未结案ADM清单到企业微信群并@本人"
+      : "请先在服务器配置企业微信机器人";
     await loadTasks();
   } catch (error) {
     showError(error.message);
@@ -234,6 +242,26 @@ elements["assign-form"].addEventListener("submit", async event => {
 });
 elements["export-button"].addEventListener("click", () => {
   window.location.href = `/api/export?${buildQuery(true)}`;
+});
+elements["wecom-send-button"].addEventListener("click", async () => {
+  if (!state.person || !state.wecomEnabled) return;
+  if (!window.confirm(`确认发送${state.person}全部未结案ADM清单到企业微信？`)) return;
+  const button = elements["wecom-send-button"];
+  button.disabled = true;
+  button.textContent = "正在发送...";
+  try {
+    const result = await api("/api/wecom/send", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({person: state.person}),
+    });
+    showSuccess(`已发送${result.taskCount}张未结案ADM给${result.person}${result.mentioned ? "并@本人" : ""}。`);
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    button.disabled = !state.wecomEnabled;
+    button.textContent = "发送企业微信";
+  }
 });
 
 initialize();

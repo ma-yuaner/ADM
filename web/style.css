@@ -55,6 +55,8 @@ h1 { margin: 0; font-size: 20px; font-weight: 600; }
 .button:hover { background: var(--surface-soft); }
 .button-primary { border-color: var(--brand); color: #fff; background: var(--brand); }
 .button-primary:hover { background: #1749c2; }
+.button-wecom { border-color: #16a66a; color: #fff; background: #16a66a; white-space: nowrap; }
+.button-wecom:hover:not(:disabled) { border-color: #118657; background: #118657; }
 .button:disabled { cursor: not-allowed; opacity: .45; }
 .button-small { min-height: 30px; padding: 0 10px; font-size: 12px; }
 .selection-bar { padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--brand-soft); font-size: 13px; }

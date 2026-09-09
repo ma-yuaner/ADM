@@ -53,11 +53,14 @@ def test_export_returns_valid_workbook(client):
     response = client.get("/api/export?scope=team&person=黄娜娟&source=CTRIP")
     assert response.status_code == 200
     assert response.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    workbook = load_workbook(BytesIO(response.data), read_only=True)
+    workbook = load_workbook(BytesIO(response.data))
     assert workbook.sheetnames == ["ADM待处理"]
     sheet = workbook["ADM待处理"]
-    assert sheet.max_row >= 2
-    headers = [cell.value for cell in sheet[1]]
+    assert sheet.max_row >= 5
+    assert sheet["A1"].value == "ADM未结案订单核实清单"
+    assert sheet.freeze_panes == "A5"
+    assert sheet["A1"].fill.fgColor.rgb.endswith("17324D")
+    headers = [cell.value for cell in sheet[4]]
     assert headers == [
         "ADM单号",
         "平台",
@@ -78,5 +81,12 @@ def test_export_returns_valid_workbook(client):
         "申诉结果",
         "结案处理结果",
     ]
-    assert sheet["L2"].value is None
-    assert sheet["N2"].value in {"已录入差异", "未录入差异"}
+    assert sheet["L5"].value is None
+    assert sheet["N5"].value in {"已录入差异", "未录入差异"}
+    assert len(sheet.data_validations.dataValidation) == 1
+
+
+def test_wecom_send_is_disabled_by_default(client):
+    response = client.post("/api/wecom/send", json={"person": "黄娜娟"})
+    assert response.status_code == 503
+    assert "尚未启用" in response.get_json()["message"]

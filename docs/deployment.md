@@ -23,6 +23,16 @@ ADM_DB_DATABASE=sibedb
 ADM_HTTP_PORT=5050
 ```
 
+需要启用企业微信群发送时追加：
+
+```env
+ADM_WECOM_SEND_ENABLED=true
+ADM_WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=机器人key
+ADM_WECOM_PEOPLE_JSON={"黄娜娟":{"mobile":"企业微信手机号"},"李志君":{"user_id":"企业微信user_id"}}
+```
+
+该方式发送到机器人所在群并@对应人员，不是企业微信一对一私聊。未配置人员手机号或user_id时，系统会阻止发送。
+
 启动并验证：
 
 ```bash

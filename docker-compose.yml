@@ -15,6 +15,10 @@ services:
       ADM_DB_PASSWORD: ${ADM_DB_PASSWORD:-}
       ADM_DB_DATABASE: ${ADM_DB_DATABASE:-sibedb}
       ADM_LOG_LEVEL: ${ADM_LOG_LEVEL:-INFO}
+      ADM_WECOM_SEND_ENABLED: ${ADM_WECOM_SEND_ENABLED:-false}
+      ADM_WECOM_WEBHOOK_URL: ${ADM_WECOM_WEBHOOK_URL:-}
+      ADM_WECOM_PEOPLE_FILE: ${ADM_WECOM_PEOPLE_FILE:-config/wecom_people.json}
+      ADM_WECOM_PEOPLE_JSON: '${ADM_WECOM_PEOPLE_JSON:-}'
     ports:
       - "${ADM_HTTP_PORT:-5050}:5050"
     restart: unless-stopped

@@ -6,7 +6,8 @@ from io import BytesIO
 from pathlib import Path
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 
@@ -56,40 +57,123 @@ class ExcelExportService:
             return value
         return "" if value is None else value
 
-    def build(self, tasks: list[dict]) -> BytesIO:
+    def build(
+        self,
+        tasks: list[dict],
+        title: str = "ADM未结案订单核实清单",
+        subtitle: str | None = None,
+    ) -> BytesIO:
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "ADM待处理"
         columns = self._columns()
+        last_column = get_column_letter(len(columns))
+        subtitle = subtitle or f"共{len(tasks)}张｜导出时间：{datetime.now():%Y-%m-%d %H:%M}"
+
+        sheet.merge_cells(f"A1:{last_column}1")
+        sheet["A1"] = title
+        sheet["A1"].font = Font(name="微软雅黑", size=16, bold=True, color="FFFFFF")
+        sheet["A1"].fill = PatternFill("solid", fgColor="17324D")
+        sheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+        sheet.row_dimensions[1].height = 34
+
+        sheet.merge_cells(f"A2:{last_column}2")
+        sheet["A2"] = subtitle
+        sheet["A2"].font = Font(name="微软雅黑", size=10, color="53657A")
+        sheet["A2"].fill = PatternFill("solid", fgColor="EAF0F6")
+        sheet["A2"].alignment = Alignment(horizontal="left", vertical="center")
+        sheet.row_dimensions[2].height = 24
+
+        header_row = 4
+        data_start_row = 5
+        sheet.append([])
         sheet.append([column["label"] for column in columns])
-        for cell in sheet[1]:
+        thin_border = Border(
+            left=Side(style="thin", color="D7E0EA"),
+            right=Side(style="thin", color="D7E0EA"),
+            top=Side(style="thin", color="D7E0EA"),
+            bottom=Side(style="thin", color="D7E0EA"),
+        )
+        for cell in sheet[header_row]:
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill("solid", fgColor="2457D6")
             cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_border
+        sheet.row_dimensions[header_row].height = 32
 
         for item in tasks:
             sheet.append([self._cell_value(item.get(column["key"])) for column in columns])
 
-        for row in sheet.iter_rows(min_row=2):
+        input_column = next(
+            index for index, column in enumerate(columns, start=1)
+            if column["key"] == "confirmation"
+        )
+        for row_index, (item, row) in enumerate(
+            zip(tasks, sheet.iter_rows(min_row=data_start_row)),
+            start=data_start_row,
+        ):
+            alert_level = item.get("alertLevel")
+            if alert_level == "P0":
+                row_fill = "FDECEC"
+            elif alert_level == "P1":
+                row_fill = "FFF4D6"
+            else:
+                row_fill = "F7FAFC" if row_index % 2 == 0 else "FFFFFF"
             for cell in row:
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
+                cell.font = Font(name="微软雅黑", size=10, color="26384A")
+                cell.fill = PatternFill("solid", fgColor=row_fill)
+                cell.border = thin_border
+            row[input_column - 1].fill = PatternFill("solid", fgColor="FFF2B2")
+            row[input_column - 1].alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=True
+            )
+            sheet.row_dimensions[row_index].height = 30
 
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = sheet.dimensions
+        sheet.freeze_panes = f"A{data_start_row}"
+        sheet.auto_filter.ref = f"A{header_row}:{last_column}{max(header_row, sheet.max_row)}"
+        sheet.sheet_view.showGridLines = False
+        sheet.page_setup.orientation = "landscape"
+        sheet.page_setup.fitToWidth = 1
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
+        sheet.print_title_rows = f"1:{header_row}"
+        confirmation_validation = DataValidation(
+            type="list",
+            formula1='"确认,非我司订单,资料不全"',
+            allow_blank=True,
+        )
+        confirmation_validation.promptTitle = "请选择核实结果"
+        confirmation_validation.prompt = "确认、非我司订单或资料不全"
+        confirmation_validation.error = "请从下拉选项中选择"
+        confirmation_validation.errorTitle = "填写内容不正确"
+        confirmation_validation.showErrorMessage = True
+        sheet.add_data_validation(confirmation_validation)
+        confirmation_validation.add(
+            f"{get_column_letter(input_column)}{data_start_row}:"
+            f"{get_column_letter(input_column)}{max(data_start_row, sheet.max_row)}"
+        )
+        preferred_widths = {
+            "admNo": 20, "otaCode": 13, "airline": 10, "stageName": 17,
+            "ticketNo": 20, "amount": 14, "currency": 10,
+            "supplyIssueDate": 14, "deadline": 19, "differenceDescription": 32,
+            "owner": 14, "confirmation": 15, "actualOwner": 14,
+            "handlingProgress": 15, "appealSubmissionStatus": 18,
+            "appealReason": 32, "appealResultName": 14, "resolution": 32,
+        }
         for column_index, column in enumerate(columns, start=1):
-            values = [str(column["label"])] + [str(item.get(column["key"], "") or "") for item in tasks[:300]]
-            width = min(max(max(map(len, values)) + 2, 10), 36)
+            width = preferred_widths.get(column["key"], 15)
             sheet.column_dimensions[get_column_letter(column_index)].width = width
             key = column["key"]
             if key in {"deadline", "updateTime"}:
-                for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=2):
+                for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "yyyy-mm-dd hh:mm"
             elif key == "supplyIssueDate":
-                for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=2):
+                for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "yyyy-mm-dd"
             elif key == "amount":
-                for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=2):
+                for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "#,##0.00"
+                    cell[0].alignment = Alignment(horizontal="right", vertical="top")
 
         stream = BytesIO()
         workbook.save(stream)

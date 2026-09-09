@@ -30,6 +30,10 @@ class AppConfig:
     db_password: str
     db_database: str
     export_profiles_file: Path
+    wecom_send_enabled: bool
+    wecom_webhook_url: str
+    wecom_people_file: Path
+    wecom_people_json: str
 
     @classmethod
     def from_environment(cls, project_dir: Path) -> "AppConfig":
@@ -51,6 +55,12 @@ class AppConfig:
             export_profiles_file=project_dir / os.getenv(
                 "ADM_EXPORT_PROFILES", "config/export_profiles.json"
             ),
+            wecom_send_enabled=_bool_env("ADM_WECOM_SEND_ENABLED"),
+            wecom_webhook_url=os.getenv("ADM_WECOM_WEBHOOK_URL", "").strip(),
+            wecom_people_file=project_dir / os.getenv(
+                "ADM_WECOM_PEOPLE_FILE", "config/wecom_people.json"
+            ),
+            wecom_people_json=os.getenv("ADM_WECOM_PEOPLE_JSON", "").strip(),
         )
 
     def to_flask_config(self) -> dict:
@@ -69,4 +79,8 @@ class AppConfig:
             "DB_PASSWORD": self.db_password,
             "DB_DATABASE": self.db_database,
             "EXPORT_PROFILES_FILE": self.export_profiles_file,
+            "WECOM_SEND_ENABLED": self.wecom_send_enabled,
+            "WECOM_WEBHOOK_URL": self.wecom_webhook_url,
+            "WECOM_PEOPLE_FILE": self.wecom_people_file,
+            "WECOM_PEOPLE_JSON": self.wecom_people_json,
         }

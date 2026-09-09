@@ -16,6 +16,10 @@ def _repository():
     return current_app.extensions["adm_repository"]
 
 
+def _wecom():
+    return current_app.extensions["wecom_service"]
+
+
 def _success(data=None, message="success", status=200):
     return jsonify(json_ready({"success": True, "message": message, "data": data})), status
 
@@ -71,6 +75,7 @@ def config():
         "defaultPerson": current_app.config["DEFAULT_PERSON"],
         "dataMode": _repository().mode,
         "writeEnabled": _repository().health()["writeEnabled"],
+        "wecomEnabled": _wecom().enabled,
     })
 
 
@@ -124,4 +129,36 @@ def export_tasks():
         download_name=filename,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         max_age=0,
+    )
+
+
+@api.post("/wecom/send")
+def send_wecom():
+    body = request.get_json(silent=True) or {}
+    person = str(body.get("person") or "").strip()
+    if not person or len(person) > 64:
+        raise AppError("person不能为空且长度不能超过64")
+    result = _repository().list_tasks({
+        "scope": "mine",
+        "person": person,
+        "source": "",
+        "alert": "",
+        "stage": "",
+        "search": "",
+        "page": 1,
+        "page_size": 10000,
+    })
+    tasks = result["items"]
+    if not tasks:
+        raise AppError(f"{person}当前没有未结案ADM")
+    exporter = ExcelExportService(current_app.config["EXPORT_PROFILES_FILE"])
+    workbook = exporter.build(
+        tasks,
+        title=f"{person}—ADM未结案订单核实清单",
+        subtitle=f"共{len(tasks)}张｜请核实订单归属、差异及申诉进度",
+    )
+    filename = f"ADM未结案核实_{person}_{datetime.now():%Y%m%d_%H%M}.xlsx"
+    return _success(
+        _wecom().send_excel(person, workbook, filename, len(tasks)),
+        f"已发送{len(tasks)}张未结案ADM给{person}",
     )
