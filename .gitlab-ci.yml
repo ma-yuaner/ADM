@@ -12,7 +12,7 @@ test:
   image: python:3.12-slim
   script:
     - pip install --no-cache-dir -r requirements-dev.txt
-    - pytest -q
+    - python -m pytest -q
 
 build_image:
   stage: build
