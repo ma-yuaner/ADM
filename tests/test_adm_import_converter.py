@@ -34,6 +34,19 @@ def _post_workbook(client, workbook):
     )
 
 
+def _import_recovery(client, workbook):
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    response = client.post(
+        "/api/recovery/import",
+        data={"operator": "曾芸芸", "file": (stream, "恢复编码.xlsx")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    return client.get("/api/recovery").get_json()["data"]["items"][0]
+
+
 def _converted_row(response, adm_no: str):
     assert response.status_code == 200
     workbook = load_workbook(BytesIO(response.data), data_only=True)
@@ -78,8 +91,63 @@ def test_business_return_converts_to_complete_adm_import(client):
     assert "系统=BSP" in remark
     assert "PCC=SZX173" in remark
     assert "恢复编码=PNR8X2" in remark
+    assert "恢复状态=未进入恢复跟进" in remark
     assert sheet.auto_filter.ref.startswith("A1:AL")
     assert sheet.freeze_panes == "A2"
+    output.close()
+
+
+def test_completed_recovery_status_is_merged_into_return_remark(client):
+    workbook = _business_workbook(client)
+    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": "PNR8X2"})
+    item = _import_recovery(client, workbook)
+    updated = client.patch(
+        f"/api/recovery/{item['id']}",
+        json={"status": "COMPLETED", "remark": "已恢复", "handler": "曾芸芸"},
+    )
+    assert updated.status_code == 200
+
+    response = _post_workbook(client, workbook)
+    output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
+    remark = sheet.cell(row_number, headers["备注"]).value
+    assert "恢复编码=PNR8X2" in remark
+    assert "恢复状态=已完成" in remark
+    output.close()
+
+
+def test_tracked_recovery_is_merged_when_return_workbook_code_is_blank(client):
+    workbook = _business_workbook(client)
+    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": "PNR8X2"})
+    item = _import_recovery(client, workbook)
+    client.patch(
+        f"/api/recovery/{item['id']}",
+        json={"status": "PROCESSING", "remark": "处理中", "handler": "曾芸芸"},
+    )
+    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": ""})
+
+    response = _post_workbook(client, workbook)
+    output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
+    remark = sheet.cell(row_number, headers["备注"]).value
+    assert "恢复编码=PNR8X2" in remark
+    assert "恢复状态=恢复中" in remark
+    output.close()
+
+
+def test_recovery_code_mismatch_is_explicit_in_return_remark(client):
+    workbook = _business_workbook(client)
+    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": "PNR8X2"})
+    item = _import_recovery(client, workbook)
+    client.patch(
+        f"/api/recovery/{item['id']}",
+        json={"status": "COMPLETED", "remark": "旧编码完成", "handler": "曾芸芸"},
+    )
+    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": "PNR-NEW"})
+
+    response = _post_workbook(client, workbook)
+    output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
+    remark = sheet.cell(row_number, headers["备注"]).value
+    assert "恢复编码=PNR-NEW" in remark
+    assert "恢复状态=编码不一致（跟进库：PNR8X2/已完成）" in remark
     output.close()
 
 

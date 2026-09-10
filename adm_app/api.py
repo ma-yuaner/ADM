@@ -279,7 +279,10 @@ def convert_adm_import_workbook():
     source_rows = _repository().find_import_rows_by_adm_numbers(
         [row.adm_no for row in workbench_rows]
     )
-    stream = converter.convert(workbench_rows, source_rows)
+    recovery_rows = _recovery().find_by_adm_numbers(
+        [row.adm_no for row in workbench_rows]
+    )
+    stream = converter.convert(workbench_rows, source_rows, recovery_rows)
     filename = f"ADM管理导入_{datetime.now():%Y%m%d_%H%M}.xlsx"
     return send_file(
         stream,

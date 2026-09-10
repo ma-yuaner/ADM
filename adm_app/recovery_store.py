@@ -149,6 +149,25 @@ class RecoveryStore:
             "pagination": {"page": page, "pageSize": page_size, "total": total},
         }
 
+    def find_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+        """按ADM单号批量返回当前恢复编码跟进记录。"""
+        unique_numbers = list(dict.fromkeys(number for number in adm_numbers if number))
+        if not unique_numbers:
+            return {}
+
+        result: dict[str, dict] = {}
+        with self._connect() as connection:
+            # SQLite默认变量数量有限，分批查询避免大文件转换时报错。
+            for start in range(0, len(unique_numbers), 500):
+                batch = unique_numbers[start:start + 500]
+                placeholders = ",".join("?" for _ in batch)
+                rows = connection.execute(
+                    f"SELECT * FROM adm_recovery_followup WHERE adm_no IN ({placeholders})",
+                    batch,
+                ).fetchall()
+                result.update({row["adm_no"]: self._serialize(row) for row in rows})
+        return result
+
     def update(self, item_id: int, status: str, remark: str, handler: str) -> dict:
         if status not in STATUS_NAMES:
             raise AppError("恢复状态不正确")

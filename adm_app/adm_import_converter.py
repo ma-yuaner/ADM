@@ -188,7 +188,12 @@ class AdmImportConverter:
         finally:
             workbook.close()
 
-    def convert(self, rows: Iterable[WorkbenchRow], source_rows: dict[str, dict]) -> BytesIO:
+    def convert(
+        self,
+        rows: Iterable[WorkbenchRow],
+        source_rows: dict[str, dict],
+        recovery_rows: dict[str, dict] | None = None,
+    ) -> BytesIO:
         parsed_rows = list(rows)
         missing = [row.adm_no for row in parsed_rows if row.adm_no not in source_rows]
         if missing:
@@ -196,7 +201,11 @@ class AdmImportConverter:
             suffix = f"等{len(missing)}张" if len(missing) > 20 else ""
             raise AppError(f"数据库中未找到有效ADM：{preview}{suffix}，本次未生成导入文件")
 
-        output_rows = [self._merge_row(row, source_rows[row.adm_no]) for row in parsed_rows]
+        tracked = recovery_rows or {}
+        output_rows = [
+            self._merge_row(row, source_rows[row.adm_no], tracked.get(row.adm_no))
+            for row in parsed_rows
+        ]
         self._validate_rows(output_rows)
         return self._build_workbook(output_rows)
 
@@ -204,7 +213,7 @@ class AdmImportConverter:
     def _submission_status_from_source(source: dict) -> str:
         return appeal_submission_name(source)
 
-    def _merge_row(self, workbench: WorkbenchRow, source: dict) -> dict:
+    def _merge_row(self, workbench: WorkbenchRow, source: dict, recovery: dict | None) -> dict:
         merged = dict(source)
         values = workbench.values
 
@@ -247,7 +256,22 @@ class AdmImportConverter:
             merged["appeal_status"] = 0
             merged["appeal_result"] = 0 if appeal_result == "申诉成功" else 1
 
-        merged["remark"] = self._merge_remark(_excel_text(source.get("remark")), workbench.context)
+        context = dict(workbench.context)
+        workbook_code = _excel_text(context.get("恢复编码")).upper()
+        if recovery:
+            tracked_code = _excel_text(recovery.get("recovery_code")).upper()
+            status_name = _excel_text(recovery.get("statusName") or recovery.get("status"))
+            if not workbook_code:
+                context["恢复编码"] = tracked_code
+                context["恢复状态"] = status_name
+            elif workbook_code == tracked_code:
+                context["恢复状态"] = status_name
+            else:
+                context["恢复状态"] = f"编码不一致（跟进库：{tracked_code}/{status_name}）"
+        elif workbook_code:
+            context["恢复状态"] = "未进入恢复跟进"
+
+        merged["remark"] = self._merge_remark(_excel_text(source.get("remark")), context)
         self._add_display_values(merged)
         return merged
 
@@ -265,6 +289,7 @@ class AdmImportConverter:
             "系统": "系统",
             "PCC": "PCC",
             "恢复编码": "恢复编码",
+            "恢复状态": "恢复状态",
         }
         for label, alias in aliases.items():
             value = context.get(label, "")
