@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from io import BytesIO
 
 from flask import Blueprint, current_app, jsonify, request, send_file
+from openpyxl import load_workbook
 
 from .errors import AppError
 from .exporter import ExcelExportService
@@ -18,6 +20,10 @@ def _repository():
 
 def _wecom():
     return current_app.extensions["wecom_service"]
+
+
+def _recovery():
+    return current_app.extensions["recovery_store"]
 
 
 def _success(data=None, message="success", status=200):
@@ -42,6 +48,14 @@ def _positive_int(name: str, default: int, maximum: int) -> int:
     if value < 1 or value > maximum:
         raise AppError(f"{name}必须在1到{maximum}之间")
     return value
+
+
+def _excel_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
 
 
 def _task_filters(export: bool = False) -> dict:
@@ -162,3 +176,110 @@ def send_wecom():
         _wecom().send_excel(person, workbook, filename, len(tasks)),
         f"已发送{len(tasks)}张未结案ADM给{person}",
     )
+
+
+@api.post("/recovery/import")
+def import_recovery_codes():
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        raise AppError("请选择需要导入的Excel文件")
+    if not uploaded.filename.lower().endswith(".xlsx"):
+        raise AppError("只支持.xlsx文件")
+    imported_by = (request.form.get("operator") or "").strip()
+    if not imported_by or len(imported_by) > 64:
+        raise AppError("导入操作人不能为空且长度不能超过64")
+
+    try:
+        workbook = load_workbook(BytesIO(uploaded.read()), read_only=True, data_only=True)
+    except Exception as error:
+        raise AppError("Excel文件无法读取，请使用工作台导出的原始模板") from error
+    try:
+        sheet = workbook["ADM待处理"] if "ADM待处理" in workbook.sheetnames else workbook.active
+        header_row = None
+        header_map: dict[str, int] = {}
+        recovery_header = ""
+        for row_number, row in enumerate(sheet.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
+            current = {_excel_text(value): index for index, value in enumerate(row)}
+            recovery_header = "恢复编码" if "恢复编码" in current else ("编码" if "编码" in current else "")
+            if "ADM单号" in current and recovery_header:
+                header_row = row_number
+                header_map = current
+                break
+        if header_row is None:
+            raise AppError("Excel缺少“ADM单号”或“恢复编码”列")
+
+        pending: dict[str, str] = {}
+        invalid_rows: list[dict] = []
+        blank_count = 0
+        duplicate_count = 0
+        for row_number, row in enumerate(
+            sheet.iter_rows(min_row=header_row + 1, values_only=True), start=header_row + 1
+        ):
+            adm_no = _excel_text(row[header_map["ADM单号"]] if header_map["ADM单号"] < len(row) else None)
+            recovery_code = _excel_text(
+                row[header_map[recovery_header]] if header_map[recovery_header] < len(row) else None
+            ).upper()
+            if not adm_no and not recovery_code:
+                continue
+            if not recovery_code:
+                blank_count += 1
+                continue
+            if not adm_no:
+                invalid_rows.append({"row": row_number, "reason": "恢复编码有值但ADM单号为空"})
+                continue
+            if len(recovery_code) > 64:
+                invalid_rows.append({"row": row_number, "admNo": adm_no, "reason": "恢复编码超过64位"})
+                continue
+            if adm_no in pending:
+                if pending[adm_no] != recovery_code:
+                    invalid_rows.append({"row": row_number, "admNo": adm_no, "reason": "同一ADM存在不同恢复编码"})
+                else:
+                    duplicate_count += 1
+                continue
+            pending[adm_no] = recovery_code
+        if len(pending) > 10000:
+            raise AppError("单次最多导入10000张ADM")
+
+        tasks = _repository().find_by_adm_numbers(list(pending))
+        missing = sorted(set(pending) - set(tasks))
+        counters = {"created": 0, "reset": 0, "unchanged": 0}
+        for adm_no, task in tasks.items():
+            result = _recovery().upsert(task, pending[adm_no], imported_by)
+            counters[result] += 1
+        return _success({
+            "validCodeCount": len(pending),
+            "importedCount": len(tasks),
+            "createdCount": counters["created"],
+            "resetCount": counters["reset"],
+            "unchangedCount": counters["unchanged"],
+            "blankCount": blank_count,
+            "duplicateCount": duplicate_count,
+            "missingAdmNumbers": missing[:100],
+            "invalidRows": invalid_rows[:100],
+        }, f"成功导入{len(tasks)}条恢复编码")
+    finally:
+        workbook.close()
+
+
+@api.get("/recovery")
+def recovery_items():
+    status = _clean_text("status", 20)
+    search = _clean_text("search", 100)
+    page = _positive_int("page", 1, 100000)
+    page_size = _positive_int("pageSize", 20, 200)
+    return _success(_recovery().list(status, search, page, page_size))
+
+
+@api.patch("/recovery/<int:item_id>")
+def update_recovery(item_id: int):
+    body = request.get_json(silent=True) or {}
+    status = str(body.get("status") or "").strip().upper()
+    remark = str(body.get("remark") or "").strip()
+    handler = str(body.get("handler") or "").strip()
+    if len(remark) > 500:
+        raise AppError("备注不能超过500字")
+    if status == "EXCEPTION" and not remark:
+        raise AppError("标记异常时必须填写处理备注")
+    if not handler or len(handler) > 64:
+        raise AppError("处理人不能为空且长度不能超过64")
+    return _success(_recovery().update(item_id, status, remark, handler), "恢复状态已更新")

@@ -18,6 +18,8 @@ COPY --chown=appuser:appgroup adm_app ./adm_app
 COPY --chown=appuser:appgroup config ./config
 COPY --chown=appuser:appgroup web ./web
 
+RUN mkdir -p /app/data && chown -R appuser:appgroup /app/data
+
 USER appuser
 EXPOSE 5050
 

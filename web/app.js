@@ -9,6 +9,11 @@ const state = {
   singleTarget: null,
   writeEnabled: false,
   wecomEnabled: false,
+  pageMode: "assignment",
+  recoveryPage: 1,
+  recoveryPageSize: 20,
+  recoveryTotal: 0,
+  recoveryTarget: null,
 };
 
 const elements = Object.fromEntries([
@@ -19,6 +24,14 @@ const elements = Object.fromEntries([
   "select-all", "task-body", "loading", "empty-state", "result-count", "previous-page",
   "next-page", "page-label", "assign-dialog", "assign-form", "assign-description",
   "assignee-select", "assign-cancel",
+  "assignment-nav", "recovery-nav", "assignment-page", "recovery-page",
+  "recovery-file", "recovery-import-button", "recovery-import-result",
+  "recovery-status-filter", "recovery-search", "recovery-search-button",
+  "recovery-pending", "recovery-processing", "recovery-completed", "recovery-exception",
+  "recovery-body", "recovery-loading", "recovery-empty", "recovery-result-count",
+  "recovery-previous-page", "recovery-next-page", "recovery-page-label",
+  "recovery-dialog", "recovery-form", "recovery-dialog-description",
+  "recovery-dialog-status", "recovery-dialog-remark", "recovery-dialog-cancel",
 ].map(id => [id, document.getElementById(id)]));
 
 function escapeHtml(value) {
@@ -34,6 +47,27 @@ function formatDateTime(value) {
 
 function formatAmount(value, currency) {
   return `${currency || "CNY"} ${Number(value || 0).toLocaleString("zh-CN", {maximumFractionDigits: 2})}`;
+}
+
+function switchPage(mode) {
+  state.pageMode = mode;
+  const recovery = mode === "recovery";
+  elements["assignment-page"].hidden = recovery;
+  elements["recovery-page"].hidden = !recovery;
+  elements["assignment-nav"].classList.toggle("active", !recovery);
+  elements["recovery-nav"].classList.toggle("active", recovery);
+  elements["wecom-send-button"].hidden = recovery;
+  if (recovery) loadRecoveryItems();
+}
+
+function buildRecoveryQuery() {
+  const params = new URLSearchParams({
+    page: state.recoveryPage,
+    pageSize: state.recoveryPageSize,
+  });
+  if (elements["recovery-status-filter"].value) params.set("status", elements["recovery-status-filter"].value);
+  if (elements["recovery-search"].value.trim()) params.set("search", elements["recovery-search"].value.trim());
+  return params.toString();
 }
 
 function buildQuery(exportMode = false) {
@@ -138,6 +172,61 @@ async function loadTasks() {
     elements.loading.hidden = true;
     showError(error.message);
   }
+}
+
+function renderRecoveryItems(data) {
+  const statusClass = {
+    PENDING: "badge-p1",
+    PROCESSING: "badge-p2",
+    COMPLETED: "badge-normal",
+    EXCEPTION: "badge-p0",
+  };
+  elements["recovery-body"].innerHTML = data.items.map(item => `
+    <tr>
+      <td class="adm-number">${escapeHtml(item.adm_no)}</td>
+      <td><strong class="recovery-code">${escapeHtml(item.recovery_code)}</strong></td>
+      <td><span class="owner-cell"><span>${escapeHtml(item.ota_code || "未配置")}</span><small>${escapeHtml(item.ota_order_no || "-")}</small></span></td>
+      <td>${escapeHtml(item.ticket_no || "-")}</td>
+      <td>${escapeHtml(item.airline || "未配置")}</td>
+      <td><span class="owner-cell"><span>${escapeHtml(item.actual_owner || item.owner || "未分配")}</span><small>原负责人：${escapeHtml(item.owner || "未分配")}</small></span></td>
+      <td>${escapeHtml(formatDateTime(item.import_time))}</td>
+      <td><span class="badge ${statusClass[item.status] || "badge-normal"}">${escapeHtml(item.statusName)}</span></td>
+      <td class="remark-cell">${escapeHtml(item.remark || "-")}</td>
+      <td><button class="row-action" type="button" data-recovery-edit="${item.id}" data-adm-no="${escapeHtml(item.adm_no)}" data-status="${escapeHtml(item.status)}" data-remark="${escapeHtml(item.remark || "")}">更新进度</button></td>
+    </tr>
+  `).join("");
+  elements["recovery-loading"].hidden = true;
+  elements["recovery-empty"].hidden = data.items.length > 0;
+  elements["recovery-pending"].textContent = Number(data.summary.PENDING || 0).toLocaleString("zh-CN");
+  elements["recovery-processing"].textContent = Number(data.summary.PROCESSING || 0).toLocaleString("zh-CN");
+  elements["recovery-completed"].textContent = Number(data.summary.COMPLETED || 0).toLocaleString("zh-CN");
+  elements["recovery-exception"].textContent = Number(data.summary.EXCEPTION || 0).toLocaleString("zh-CN");
+  state.recoveryTotal = data.pagination.total;
+  const totalPages = Math.max(1, Math.ceil(state.recoveryTotal / state.recoveryPageSize));
+  elements["recovery-result-count"].textContent = `共${state.recoveryTotal.toLocaleString("zh-CN")}条`;
+  elements["recovery-page-label"].textContent = `第${state.recoveryPage}页 / 共${totalPages}页`;
+  elements["recovery-previous-page"].disabled = state.recoveryPage <= 1;
+  elements["recovery-next-page"].disabled = state.recoveryPage >= totalPages;
+}
+
+async function loadRecoveryItems() {
+  clearError();
+  elements["recovery-loading"].hidden = false;
+  elements["recovery-empty"].hidden = true;
+  try {
+    renderRecoveryItems(await api(`/api/recovery?${buildRecoveryQuery()}`));
+  } catch (error) {
+    elements["recovery-loading"].hidden = true;
+    showError(error.message);
+  }
+}
+
+function openRecoveryDialog(button) {
+  state.recoveryTarget = Number(button.dataset.recoveryEdit);
+  elements["recovery-dialog-description"].textContent = `ADM ${button.dataset.admNo} 的编码恢复进度。`;
+  elements["recovery-dialog-status"].value = button.dataset.status;
+  elements["recovery-dialog-remark"].value = button.dataset.remark || "";
+  elements["recovery-dialog"].showModal();
 }
 
 function updateSelection() {
@@ -266,6 +355,76 @@ elements["wecom-send-button"].addEventListener("click", async () => {
   } finally {
     button.disabled = !state.wecomEnabled;
     button.textContent = "发送企业微信";
+  }
+});
+
+elements["assignment-nav"].addEventListener("click", () => switchPage("assignment"));
+elements["recovery-nav"].addEventListener("click", () => switchPage("recovery"));
+elements["recovery-search-button"].addEventListener("click", () => { state.recoveryPage = 1; loadRecoveryItems(); });
+elements["recovery-search"].addEventListener("keydown", event => {
+  if (event.key === "Enter") { state.recoveryPage = 1; loadRecoveryItems(); }
+});
+elements["recovery-status-filter"].addEventListener("change", () => { state.recoveryPage = 1; loadRecoveryItems(); });
+elements["recovery-previous-page"].addEventListener("click", () => {
+  if (state.recoveryPage > 1) { state.recoveryPage -= 1; loadRecoveryItems(); }
+});
+elements["recovery-next-page"].addEventListener("click", () => {
+  if (state.recoveryPage * state.recoveryPageSize < state.recoveryTotal) { state.recoveryPage += 1; loadRecoveryItems(); }
+});
+elements["recovery-import-button"].addEventListener("click", () => elements["recovery-file"].click());
+elements["recovery-file"].addEventListener("change", async () => {
+  const file = elements["recovery-file"].files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append("file", file);
+  form.append("operator", state.person || "ADM专员");
+  const button = elements["recovery-import-button"];
+  button.disabled = true;
+  button.textContent = "正在导入...";
+  try {
+    const result = await api("/api/recovery/import", {method: "POST", body: form});
+    const warnings = result.missingAdmNumbers.length + result.invalidRows.length;
+    elements["recovery-import-result"].textContent = `导入${result.importedCount}条${warnings ? `，${warnings}条需核对` : ""}`;
+    showSuccess(`恢复编码导入完成：新增${result.createdCount}条，编码变更重置${result.resetCount}条。`);
+    if (warnings) {
+      const missing = result.missingAdmNumbers.slice(0, 5).join("、");
+      const invalid = result.invalidRows.slice(0, 5).map(item => `第${item.row}行${item.reason}`).join("；");
+      showError(`部分记录未导入。${missing ? `未找到ADM：${missing}。` : ""}${invalid}`);
+    }
+    state.recoveryPage = 1;
+    await loadRecoveryItems();
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    elements["recovery-file"].value = "";
+    button.disabled = false;
+    button.textContent = "导入填写后的Excel";
+  }
+});
+elements["recovery-body"].addEventListener("click", event => {
+  const button = event.target.closest("[data-recovery-edit]");
+  if (button) openRecoveryDialog(button);
+});
+elements["recovery-dialog-cancel"].addEventListener("click", () => elements["recovery-dialog"].close());
+elements["recovery-form"].addEventListener("submit", async event => {
+  event.preventDefault();
+  const status = elements["recovery-dialog-status"].value;
+  const remark = elements["recovery-dialog-remark"].value.trim();
+  if (status === "EXCEPTION" && !remark) {
+    showError("标记异常时必须填写处理备注");
+    return;
+  }
+  try {
+    await api(`/api/recovery/${state.recoveryTarget}`, {
+      method: "PATCH",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({status, remark, handler: state.person || "ADM专员"}),
+    });
+    elements["recovery-dialog"].close();
+    showSuccess("编码恢复进度已更新。");
+    await loadRecoveryItems();
+  } catch (error) {
+    showError(error.message);
   }
 });
 

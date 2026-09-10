@@ -102,6 +102,10 @@ class AdmRepository(ABC):
     def assign(self, adm_ids: list[int], actual_owner: str, actor: str, client_ip: str) -> dict:
         raise NotImplementedError
 
+    @abstractmethod
+    def find_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+        raise NotImplementedError
+
 
 class MySQLAdmRepository(AdmRepository):
     mode = "mysql"
@@ -296,6 +300,21 @@ class MySQLAdmRepository(AdmRepository):
 
         return {"updatedIds": updated, "updatedCount": len(updated), "skipped": skipped}
 
+    def find_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+        normalized = list(dict.fromkeys(value.strip() for value in adm_numbers if value.strip()))
+        if not normalized:
+            return {}
+        sql = text(
+            f"SELECT {TASK_COLUMNS} FROM adm_records "
+            "WHERE status = 1 AND adm_no IN :adm_numbers"
+        ).bindparams(bindparam("adm_numbers", expanding=True))
+        with self.engine.connect() as connection:
+            rows = [
+                dict(row._mapping)
+                for row in connection.execute(sql, {"adm_numbers": normalized})
+            ]
+        return {task["admNo"]: task for task in (serialize_task(row) for row in rows)}
+
 
 class MockAdmRepository(AdmRepository):
     mode = "mock"
@@ -403,6 +422,14 @@ class MockAdmRepository(AdmRepository):
                 row["transfer_awaiting_acceptance"] = True
                 updated.append(adm_id)
         return {"updatedIds": updated, "updatedCount": len(updated), "skipped": skipped}
+
+    def find_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+        wanted = {value.strip() for value in adm_numbers if value.strip()}
+        return {
+            task["admNo"]: task
+            for task in (serialize_task(deepcopy(row)) for row in self.rows)
+            if task["admNo"] in wanted
+        }
 
 
 def _repo_engine(project_dir: Path) -> Engine:

@@ -22,7 +22,8 @@
       {"key": "appealSubmissionStatus", "label": "申诉状态"},
       {"key": "appealReason", "label": "申诉原因"},
       {"key": "appealResultName", "label": "申诉结果"},
-      {"key": "resolution", "label": "结案处理结果"}
+      {"key": "resolution", "label": "结案处理结果"},
+      {"key": "recoveryCode", "label": "恢复编码"}
     ]
   }
 }

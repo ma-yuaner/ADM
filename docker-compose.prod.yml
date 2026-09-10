@@ -7,6 +7,8 @@ services:
     ports:
       - "${ADM_HTTP_PORT:-5050}:5050"
     restart: unless-stopped
+    volumes:
+      - adm-recovery-data:/app/data
     security_opt:
       - no-new-privileges:true
     tmpfs:
@@ -17,3 +19,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+volumes:
+  adm-recovery-data:

@@ -29,6 +29,8 @@ ADM_HTTP_PORT=5050
 ADM_WECOM_SEND_ENABLED=true
 ADM_WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=机器人key
 ADM_WECOM_PEOPLE_JSON={"黄娜娟":{"mobile":"企业微信手机号"},"李志君":{"user_id":"企业微信user_id"}}
+ADM_RECOVERY_DB_PATH=data/adm_recovery.db
+ADM_UPLOAD_MAX_BYTES=10485760
 ```
 
 该方式发送到机器人所在群，不是企业微信一对一私聊。人员手机号或user_id是可选配置：未配置时仍会发送并在正文写明处理人，配置后会额外@本人。页面只有人工点击并确认后才会发送。
@@ -41,6 +43,8 @@ docker compose ps
 docker compose logs --tail=100 adm-assignment-demo
 curl http://127.0.0.1:5050/api/health
 ```
+
+`adm-recovery-data`是恢复编码跟进的持久化卷。普通`docker compose down`不会删除；不要执行`docker compose down -v`，否则会删除恢复编码跟进数据。
 
 后续更新：
 

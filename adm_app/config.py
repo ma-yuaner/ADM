@@ -34,6 +34,8 @@ class AppConfig:
     wecom_webhook_url: str
     wecom_people_file: Path
     wecom_people_json: str
+    recovery_db_path: Path
+    upload_max_bytes: int
 
     @classmethod
     def from_environment(cls, project_dir: Path) -> "AppConfig":
@@ -61,6 +63,10 @@ class AppConfig:
                 "ADM_WECOM_PEOPLE_FILE", "config/wecom_people.json"
             ),
             wecom_people_json=os.getenv("ADM_WECOM_PEOPLE_JSON", "").strip(),
+            recovery_db_path=project_dir / os.getenv(
+                "ADM_RECOVERY_DB_PATH", "data/adm_recovery.db"
+            ),
+            upload_max_bytes=int(os.getenv("ADM_UPLOAD_MAX_BYTES", str(10 * 1024 * 1024))),
         )
 
     def to_flask_config(self) -> dict:
@@ -83,4 +89,6 @@ class AppConfig:
             "WECOM_WEBHOOK_URL": self.wecom_webhook_url,
             "WECOM_PEOPLE_FILE": self.wecom_people_file,
             "WECOM_PEOPLE_JSON": self.wecom_people_json,
+            "RECOVERY_DB_PATH": self.recovery_db_path,
+            "UPLOAD_MAX_BYTES": self.upload_max_bytes,
         }

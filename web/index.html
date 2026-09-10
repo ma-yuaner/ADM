@@ -16,6 +16,10 @@
           <div class="subtitle">待办识别、快速分配、统一Excel导出</div>
         </div>
       </div>
+      <nav class="app-nav" aria-label="工作台功能">
+        <button id="assignment-nav" class="app-nav-button active" type="button">ADM分配</button>
+        <button id="recovery-nav" class="app-nav-button" type="button">编码恢复</button>
+      </nav>
       <div class="top-actions">
         <span id="environment-badge" class="environment-badge">正在连接</span>
         <span id="sync-time" class="sync-time">数据更新：--</span>
@@ -29,6 +33,8 @@
 
     <main class="main-content">
       <div id="error-banner" class="message message-error" role="alert" hidden></div>
+      <div id="success-message" class="message message-success" role="status" hidden></div>
+      <div id="assignment-page">
       <section class="intro">
         <div>
           <h2 id="view-title">团队ADM待办</h2>
@@ -66,8 +72,6 @@
         <div id="selection-bar" class="selection-bar" hidden>
           已选择 <strong id="selected-count">0</strong> 张ADM，可批量分配给同一处理人。
         </div>
-        <div id="success-message" class="message message-success" role="status" hidden></div>
-
         <div class="table-wrap">
           <table>
             <thead>
@@ -91,6 +95,54 @@
           </div>
         </footer>
       </section>
+      </div>
+
+      <div id="recovery-page" hidden>
+        <section class="intro">
+          <div>
+            <h2>恢复编码跟进</h2>
+            <p>导入业务填写的恢复编码，统一跟进待恢复、处理中、已完成和异常记录。</p>
+          </div>
+          <div class="actions">
+            <input id="recovery-file" class="visually-hidden" type="file" accept=".xlsx">
+            <button id="recovery-import-button" class="button button-primary" type="button">导入填写后的Excel</button>
+          </div>
+        </section>
+
+        <section class="stats stats-four" aria-label="恢复编码概览">
+          <article class="stat warning"><span>待恢复</span><strong id="recovery-pending">--</strong><small>等待ADM专员处理</small></article>
+          <article class="stat"><span>恢复中</span><strong id="recovery-processing">--</strong><small>已经开始处理</small></article>
+          <article class="stat"><span>已完成</span><strong id="recovery-completed">--</strong><small>编码恢复完成</small></article>
+          <article class="stat danger"><span>异常</span><strong id="recovery-exception">--</strong><small>需要补充信息</small></article>
+        </section>
+
+        <section class="workspace">
+          <div class="toolbar">
+            <div class="filters">
+              <label class="field"><span>恢复状态</span><select id="recovery-status-filter"><option value="">全部状态</option><option value="PENDING">待恢复</option><option value="PROCESSING">恢复中</option><option value="COMPLETED">已完成</option><option value="EXCEPTION">异常</option></select></label>
+              <label class="field search-field"><span>查找记录</span><input id="recovery-search" type="search" placeholder="ADM单号 / 订单号 / 票号 / 恢复编码"></label>
+              <button id="recovery-search-button" class="button" type="button">查询</button>
+            </div>
+            <span id="recovery-import-result" class="toolbar-note"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="recovery-table">
+              <thead><tr><th>ADM单号</th><th>恢复编码</th><th>平台 / OTA订单号</th><th>票号</th><th>航司</th><th>责任人</th><th>导入时间</th><th>状态</th><th>备注</th><th>操作</th></tr></thead>
+              <tbody id="recovery-body"></tbody>
+            </table>
+            <div id="recovery-loading" class="empty-state">正在加载恢复编码数据...</div>
+            <div id="recovery-empty" class="empty-state" hidden>暂无恢复编码记录，请先导入业务填写后的Excel</div>
+          </div>
+          <footer class="table-footer">
+            <span id="recovery-result-count">共0条</span>
+            <div class="pager">
+              <button id="recovery-previous-page" class="button button-small" type="button">上一页</button>
+              <span id="recovery-page-label">第1页</span>
+              <button id="recovery-next-page" class="button button-small" type="button">下一页</button>
+            </div>
+          </footer>
+        </section>
+      </div>
     </main>
   </div>
 
@@ -106,6 +158,23 @@
         <div class="dialog-actions">
           <button id="assign-cancel" class="button" type="button">取消</button>
           <button class="button button-primary" type="submit">确认分配</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="recovery-dialog">
+    <form method="dialog" id="recovery-form">
+      <div class="dialog-head">
+        <h3>更新编码恢复进度</h3>
+        <p id="recovery-dialog-description">更新当前恢复编码的处理状态。</p>
+      </div>
+      <div class="dialog-body">
+        <label class="field"><span>处理状态</span><select id="recovery-dialog-status" required><option value="PENDING">待恢复</option><option value="PROCESSING">恢复中</option><option value="COMPLETED">已完成</option><option value="EXCEPTION">异常</option></select></label>
+        <label class="field dialog-field"><span>处理备注</span><textarea id="recovery-dialog-remark" maxlength="500" placeholder="异常时请填写原因；其他状态可选填"></textarea></label>
+        <div class="dialog-actions">
+          <button id="recovery-dialog-cancel" class="button" type="button">取消</button>
+          <button class="button button-primary" type="submit">保存</button>
         </div>
       </div>
     </form>

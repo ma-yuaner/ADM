@@ -34,6 +34,7 @@ DEFAULT_COLUMNS = [
     {"key": "appealReason", "label": "申诉原因"},
     {"key": "appealResultName", "label": "申诉结果"},
     {"key": "resolution", "label": "结案处理结果"},
+    {"key": "recoveryCode", "label": "恢复编码"},
 ]
 
 
@@ -119,6 +120,13 @@ class ExcelExportService:
             ),
             None,
         )
+        recovery_code_column = next(
+            (
+                index for index, column in enumerate(columns, start=1)
+                if column["key"] == "recoveryCode"
+            ),
+            None,
+        )
         for row_index, (item, row) in enumerate(
             zip(tasks, sheet.iter_rows(min_row=data_start_row)),
             start=data_start_row,
@@ -139,6 +147,12 @@ class ExcelExportService:
             row[input_column - 1].alignment = Alignment(
                 horizontal="center", vertical="center", wrap_text=True
             )
+            if recovery_code_column:
+                recovery_cell = row[recovery_code_column - 1]
+                recovery_cell.fill = PatternFill("solid", fgColor="FFF2B2")
+                recovery_cell.alignment = Alignment(
+                    horizontal="center", vertical="center", wrap_text=False
+                )
             if transfer_status_column and item.get("transferStatus") == "转单后未接单":
                 transfer_cell = row[transfer_status_column - 1]
                 transfer_cell.fill = PatternFill("solid", fgColor="FFF2B2")
@@ -176,6 +190,7 @@ class ExcelExportService:
             "transferCount": 10, "transferStatus": 17,
             "handlingProgress": 15, "appealSubmissionStatus": 18,
             "appealReason": 32, "appealResultName": 14, "resolution": 32,
+            "recoveryCode": 18,
         }
         for column_index, column in enumerate(columns, start=1):
             width = preferred_widths.get(column["key"], 15)
@@ -191,6 +206,9 @@ class ExcelExportService:
                 for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "#,##0.00"
                     cell[0].alignment = Alignment(horizontal="right", vertical="top")
+            elif key == "recoveryCode":
+                for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
+                    cell[0].number_format = "@"
 
         stream = BytesIO()
         workbook.save(stream)

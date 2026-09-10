@@ -88,10 +88,14 @@ def test_export_returns_valid_workbook(client):
         "申诉原因",
         "申诉结果",
         "结案处理结果",
+        "恢复编码",
     ]
     assert sheet["L5"].value is None
     assert sheet["R5"].value in {"已录入差异", "未录入差异"}
     assert len(sheet.data_validations.dataValidation) == 1
+    assert sheet["W5"].value is None
+    assert sheet["W5"].fill.fgColor.rgb.endswith("FFF2B2")
+    assert sheet["W5"].number_format == "@"
 
 
 def test_wecom_send_is_disabled_by_default(client):

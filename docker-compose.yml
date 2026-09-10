@@ -19,9 +19,13 @@ services:
       ADM_WECOM_WEBHOOK_URL: ${ADM_WECOM_WEBHOOK_URL:-}
       ADM_WECOM_PEOPLE_FILE: ${ADM_WECOM_PEOPLE_FILE:-config/wecom_people.json}
       ADM_WECOM_PEOPLE_JSON: '${ADM_WECOM_PEOPLE_JSON:-}'
+      ADM_RECOVERY_DB_PATH: ${ADM_RECOVERY_DB_PATH:-data/adm_recovery.db}
+      ADM_UPLOAD_MAX_BYTES: ${ADM_UPLOAD_MAX_BYTES:-10485760}
     ports:
       - "${ADM_HTTP_PORT:-5050}:5050"
     restart: unless-stopped
+    volumes:
+      - adm-recovery-data:/app/data
     security_opt:
       - no-new-privileges:true
     healthcheck:
@@ -30,3 +34,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+volumes:
+  adm-recovery-data:
