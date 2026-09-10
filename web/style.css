@@ -93,6 +93,19 @@ tbody tr:hover { background: var(--surface-soft); }
 .recovery-table { min-width: 1280px; }
 .recovery-code { color: var(--brand); letter-spacing: .04em; white-space: nowrap; }
 .remark-cell { max-width: 260px; white-space: normal; }
+.conversion-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.conversion-step { display: flex; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.conversion-step h3, .conversion-upload h3, .conversion-rules h3 { margin: 0 0 6px; font-size: 15px; }
+.conversion-step p, .conversion-upload p, .conversion-rules li { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.step-number { display: grid; flex: 0 0 30px; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: #fff; background: var(--brand); font-weight: 600; }
+.conversion-panel { display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); overflow: visible; }
+.conversion-upload { display: grid; justify-items: center; align-content: center; min-height: 330px; padding: 42px; text-align: center; }
+.conversion-upload p { max-width: 600px; margin-bottom: 22px; }
+.conversion-upload .toolbar-note { margin-top: 12px; }
+.upload-icon { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 16px; border-radius: 16px; color: var(--success); background: var(--success-soft); font-size: 13px; font-weight: 700; letter-spacing: .05em; }
+.conversion-rules { padding: 26px; border-left: 1px solid var(--line); background: var(--surface-soft); }
+.conversion-rules ul { margin: 10px 0 0; padding-left: 19px; }
+.conversion-rules li + li { margin-top: 8px; }
 .row-action { padding: 5px; border: 0; color: var(--brand); background: transparent; cursor: pointer; }
 .empty-state { padding: 32px 16px; color: var(--muted); text-align: center; }
 .table-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
@@ -114,6 +127,8 @@ dialog::backdrop { background: rgba(10, 18, 31, .52); }
   .app-nav { width: 100%; }
   .app-nav-button { flex: 1; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .conversion-flow, .conversion-panel { grid-template-columns: 1fr; }
+  .conversion-rules { border-top: 1px solid var(--line); border-left: 0; }
 }
 @media (max-width: 600px) {
   .topbar, .main-content { padding-left: 14px; padding-right: 14px; }

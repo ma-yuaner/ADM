@@ -109,10 +109,17 @@ class ExcelExportService:
         for item in tasks:
             sheet.append([self._cell_value(item.get(column["key"])) for column in columns])
 
-        input_column = next(
-            index for index, column in enumerate(columns, start=1)
-            if column["key"] == "confirmation"
-        )
+        editable_keys = {
+            "differenceDescription", "confirmation", "actualOwner", "handlingProgress",
+            "appealSubmissionStatus", "appealReason", "appealResultName", "resolution",
+            "recoveryCode",
+        }
+        editable_columns = {
+            column["key"]: index
+            for index, column in enumerate(columns, start=1)
+            if column["key"] in editable_keys
+        }
+        input_column = editable_columns["confirmation"]
         transfer_status_column = next(
             (
                 index for index, column in enumerate(columns, start=1)
@@ -143,7 +150,8 @@ class ExcelExportService:
                 cell.font = Font(name="微软雅黑", size=10, color="26384A")
                 cell.fill = PatternFill("solid", fgColor=row_fill)
                 cell.border = thin_border
-            row[input_column - 1].fill = PatternFill("solid", fgColor="FFF2B2")
+            for editable_column in editable_columns.values():
+                row[editable_column - 1].fill = PatternFill("solid", fgColor="FFF2B2")
             row[input_column - 1].alignment = Alignment(
                 horizontal="center", vertical="center", wrap_text=True
             )
@@ -181,6 +189,38 @@ class ExcelExportService:
             f"{get_column_letter(input_column)}{data_start_row}:"
             f"{get_column_letter(input_column)}{max(data_start_row, sheet.max_row)}"
         )
+        appeal_status_column = editable_columns.get("appealSubmissionStatus")
+        if appeal_status_column:
+            appeal_status_validation = DataValidation(
+                type="list",
+                formula1='"待提交,已提交,不提交可结案"',
+                allow_blank=True,
+            )
+            appeal_status_validation.promptTitle = "请选择申诉状态"
+            appeal_status_validation.prompt = "待提交、已提交或不提交可结案"
+            appeal_status_validation.error = "请从下拉选项中选择"
+            appeal_status_validation.showErrorMessage = True
+            sheet.add_data_validation(appeal_status_validation)
+            appeal_status_validation.add(
+                f"{get_column_letter(appeal_status_column)}{data_start_row}:"
+                f"{get_column_letter(appeal_status_column)}{max(data_start_row, sheet.max_row)}"
+            )
+        appeal_result_column = editable_columns.get("appealResultName")
+        if appeal_result_column:
+            appeal_result_validation = DataValidation(
+                type="list",
+                formula1='"申诉成功,申诉失败"',
+                allow_blank=True,
+            )
+            appeal_result_validation.promptTitle = "请选择申诉结果"
+            appeal_result_validation.prompt = "申诉成功或申诉失败"
+            appeal_result_validation.error = "请从下拉选项中选择"
+            appeal_result_validation.showErrorMessage = True
+            sheet.add_data_validation(appeal_result_validation)
+            appeal_result_validation.add(
+                f"{get_column_letter(appeal_result_column)}{data_start_row}:"
+                f"{get_column_letter(appeal_result_column)}{max(data_start_row, sheet.max_row)}"
+            )
         preferred_widths = {
             "admNo": 20, "otaCode": 13, "airline": 10, "stageName": 17,
             "ticketNo": 20, "amount": 14, "currency": 10,

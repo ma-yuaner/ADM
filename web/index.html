@@ -19,6 +19,7 @@
       <nav class="app-nav" aria-label="工作台功能">
         <button id="assignment-nav" class="app-nav-button active" type="button">ADM分配</button>
         <button id="recovery-nav" class="app-nav-button" type="button">编码恢复</button>
+        <button id="import-convert-nav" class="app-nav-button" type="button">回传转换</button>
       </nav>
       <div class="top-actions">
         <span id="environment-badge" class="environment-badge">正在连接</span>
@@ -141,6 +142,50 @@
               <button id="recovery-next-page" class="button button-small" type="button">下一页</button>
             </div>
           </footer>
+        </section>
+      </div>
+
+      <div id="import-convert-page" hidden>
+        <section class="intro">
+          <div>
+            <h2>业务回传转换</h2>
+            <p>把业务填写后的工作台Excel转换为ADM管理系统可直接导入的完整模板。</p>
+          </div>
+        </section>
+
+        <section class="conversion-flow" aria-label="回传转换步骤">
+          <article class="conversion-step">
+            <span class="step-number">1</span>
+            <div><h3>上传业务回传</h3><p>使用本工作台导出的Excel，业务人员完成黄色字段后原文件回传。</p></div>
+          </article>
+          <article class="conversion-step">
+            <span class="step-number">2</span>
+            <div><h3>自动补齐系统字段</h3><p>服务按ADM单号读取数据库最新记录，保留主键、锁单、审核及创建信息。</p></div>
+          </article>
+          <article class="conversion-step">
+            <span class="step-number">3</span>
+            <div><h3>下载导入模板</h3><p>业务字段按规则转换，无对应字段的信息自动合并到备注，再交由ADM专员导入。</p></div>
+          </article>
+        </section>
+
+        <section class="workspace conversion-panel">
+          <div class="conversion-upload">
+            <div class="upload-icon" aria-hidden="true">XLSX</div>
+            <h3>选择业务填写后的工作台Excel</h3>
+            <p>只支持.xlsx，单次最多10,000张ADM。发现缺失ADM、重复冲突或字段超长时将停止生成并明确提示。</p>
+            <input id="import-convert-file" class="visually-hidden" type="file" accept=".xlsx">
+            <button id="import-convert-button" class="button button-primary" type="button">选择文件并转换</button>
+            <span id="import-convert-result" class="toolbar-note"></span>
+          </div>
+          <div class="conversion-rules">
+            <h3>转换规则</h3>
+            <ul>
+              <li>直接回填：差异说明、实际责任人、申诉状态、申诉原因、申诉结果、结案处理结果。</li>
+              <li>写入备注：当前阶段、确认结果、转单信息、处理进度、恢复编码。</li>
+              <li>不会自动把订单结案；申诉结果和“不提交可结案”统一转为待审核，由ADM专员审核。</li>
+              <li>数据库只读也可转换；本功能只生成Excel，不修改ADM业务表。</li>
+            </ul>
+          </div>
         </section>
       </div>
     </main>

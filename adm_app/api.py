@@ -6,6 +6,7 @@ from io import BytesIO
 from flask import Blueprint, current_app, jsonify, request, send_file
 from openpyxl import load_workbook
 
+from .adm_import_converter import AdmImportConverter
 from .errors import AppError
 from .exporter import ExcelExportService
 from .json_utils import json_ready
@@ -260,6 +261,33 @@ def import_recovery_codes():
         }, f"成功导入{len(tasks)}条恢复编码")
     finally:
         workbook.close()
+
+
+@api.post("/adm-import/convert")
+def convert_adm_import_workbook():
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        raise AppError("请选择业务填写后的工作台Excel")
+    if not uploaded.filename.lower().endswith(".xlsx"):
+        raise AppError("只支持.xlsx文件")
+
+    content = uploaded.read()
+    if not content:
+        raise AppError("上传的Excel文件为空")
+    converter = AdmImportConverter()
+    workbench_rows = converter.parse_workbench(content)
+    source_rows = _repository().find_import_rows_by_adm_numbers(
+        [row.adm_no for row in workbench_rows]
+    )
+    stream = converter.convert(workbench_rows, source_rows)
+    filename = f"ADM管理导入_{datetime.now():%Y%m%d_%H%M}.xlsx"
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        max_age=0,
+    )
 
 
 @api.get("/recovery")

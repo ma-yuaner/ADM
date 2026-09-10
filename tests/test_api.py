@@ -95,7 +95,10 @@ def test_export_returns_valid_workbook(client):
     assert sheet["R5"].value in {
         "已录入差异", "有差异单不是责任人录入", "无差异单"
     }
-    assert len(sheet.data_validations.dataValidation) == 1
+    assert len(sheet.data_validations.dataValidation) == 3
+    assert sheet["J5"].fill.fgColor.rgb.endswith("FFF2B2")
+    assert sheet["M5"].fill.fgColor.rgb.endswith("FFF2B2")
+    assert sheet["S5"].fill.fgColor.rgb.endswith("FFF2B2")
     assert sheet["W5"].value is None
     assert sheet["W5"].fill.fgColor.rgb.endswith("FFF2B2")
     assert sheet["W5"].number_format == "@"

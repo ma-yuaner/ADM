@@ -25,6 +25,17 @@ TASK_COLUMNS = """
     resolution, create_time, update_time
 """
 
+IMPORT_SOURCE_COLUMNS = """
+    id, adm_no, ota_code, ota_order_no, lock_flag, lock_operator_id,
+    lock_operator, supplier_code, airline, supplier_type, ticket_no,
+    ticket_count, total_amount, currency, supply_issue_date, adm_deadline,
+    category, diff_type, diff_detail_reason, owner, actual_owner,
+    adm_status, appeal_status, appeal_result, appeal_reason, resolution,
+    handle_time, auditor_name, auditor_time, auditor_remark, actual_handler,
+    file_url, status, remark, create_time, update_time, create_user_name,
+    update_user_name
+"""
+
 FIELD_CHANGE_PATTERN = re.compile(
     r"<b>(?P<field>.*?)</b>\s*由\s*'(?P<old>.*?)'\s*修改为\s*'(?P<new>.*?)'",
     flags=re.IGNORECASE | re.DOTALL,
@@ -105,6 +116,10 @@ class AdmRepository(ABC):
 
     @abstractmethod
     def find_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
         raise NotImplementedError
 
 
@@ -333,6 +348,25 @@ class MySQLAdmRepository(AdmRepository):
             ]
         return {task["admNo"]: task for task in (serialize_task(row) for row in rows)}
 
+    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+        normalized = list(dict.fromkeys(value.strip() for value in adm_numbers if value.strip()))
+        if not normalized:
+            return {}
+
+        rows: list[dict] = []
+        with self.engine.connect() as connection:
+            for start in range(0, len(normalized), 1000):
+                batch = normalized[start:start + 1000]
+                sql = text(
+                    f"SELECT {IMPORT_SOURCE_COLUMNS} FROM adm_records "
+                    "WHERE status = 1 AND adm_no IN :adm_numbers"
+                ).bindparams(bindparam("adm_numbers", expanding=True))
+                rows.extend(
+                    dict(row._mapping)
+                    for row in connection.execute(sql, {"adm_numbers": batch})
+                )
+        return {str(row["adm_no"]).strip(): row for row in rows}
+
 
 class MockAdmRepository(AdmRepository):
     mode = "mock"
@@ -365,6 +399,12 @@ class MockAdmRepository(AdmRepository):
             "diff_detail_reason": "航司收回前期返点" if id_ % 2 else "",
             "appeal_reason": "已提交航司政策及出票记录" if adm_status == 1 else "",
             "resolution": "", "update_time": updated, "status": 1,
+            "lock_operator_id": None, "lock_operator": "",
+            "supplier_type": 3, "category": 0, "diff_type": 4,
+            "handle_time": None, "auditor_name": "", "auditor_time": None,
+            "auditor_remark": "", "actual_handler": "", "file_url": "",
+            "remark": "原系统备注", "create_user_name": "曾芸芸",
+            "update_user_name": "曾芸芸",
             "transfer_count": 0, "last_transfer_time": None,
             "last_transfer_from": "", "last_transfer_to": "",
             "last_transfer_operator": "", "post_transfer_lock_time": None,
@@ -452,6 +492,14 @@ class MockAdmRepository(AdmRepository):
             task["admNo"]: task
             for task in (serialize_task(deepcopy(row)) for row in self.rows)
             if task["admNo"] in wanted
+        }
+
+    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+        wanted = {value.strip() for value in adm_numbers if value.strip()}
+        return {
+            str(row["adm_no"]).strip(): deepcopy(row)
+            for row in self.rows
+            if str(row.get("adm_no") or "").strip() in wanted and row.get("status") == 1
         }
 
 

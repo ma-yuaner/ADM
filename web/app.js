@@ -24,7 +24,8 @@ const elements = Object.fromEntries([
   "select-all", "task-body", "loading", "empty-state", "result-count", "previous-page",
   "next-page", "page-label", "assign-dialog", "assign-form", "assign-description",
   "assignee-select", "assign-cancel",
-  "assignment-nav", "recovery-nav", "assignment-page", "recovery-page",
+  "assignment-nav", "recovery-nav", "import-convert-nav",
+  "assignment-page", "recovery-page", "import-convert-page",
   "recovery-file", "recovery-import-button", "recovery-import-result",
   "recovery-status-filter", "recovery-search", "recovery-search-button",
   "recovery-pending", "recovery-processing", "recovery-completed", "recovery-exception",
@@ -32,6 +33,7 @@ const elements = Object.fromEntries([
   "recovery-previous-page", "recovery-next-page", "recovery-page-label",
   "recovery-dialog", "recovery-form", "recovery-dialog-description",
   "recovery-dialog-status", "recovery-dialog-remark", "recovery-dialog-cancel",
+  "import-convert-file", "import-convert-button", "import-convert-result",
 ].map(id => [id, document.getElementById(id)]));
 
 function escapeHtml(value) {
@@ -52,12 +54,35 @@ function formatAmount(value, currency) {
 function switchPage(mode) {
   state.pageMode = mode;
   const recovery = mode === "recovery";
-  elements["assignment-page"].hidden = recovery;
+  const conversion = mode === "conversion";
+  const assignment = mode === "assignment";
+  elements["assignment-page"].hidden = !assignment;
   elements["recovery-page"].hidden = !recovery;
-  elements["assignment-nav"].classList.toggle("active", !recovery);
+  elements["import-convert-page"].hidden = !conversion;
+  elements["assignment-nav"].classList.toggle("active", assignment);
   elements["recovery-nav"].classList.toggle("active", recovery);
-  elements["wecom-send-button"].hidden = recovery;
+  elements["import-convert-nav"].classList.toggle("active", conversion);
+  elements["wecom-send-button"].hidden = !assignment;
   if (recovery) loadRecoveryItems();
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function responseFilename(response, fallback) {
+  const disposition = response.headers.get("content-disposition") || "";
+  const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) return decodeURIComponent(utf8[1]);
+  const plain = disposition.match(/filename="?([^";]+)"?/i);
+  return plain ? plain[1] : fallback;
 }
 
 function buildRecoveryQuery() {
@@ -360,6 +385,7 @@ elements["wecom-send-button"].addEventListener("click", async () => {
 
 elements["assignment-nav"].addEventListener("click", () => switchPage("assignment"));
 elements["recovery-nav"].addEventListener("click", () => switchPage("recovery"));
+elements["import-convert-nav"].addEventListener("click", () => switchPage("conversion"));
 elements["recovery-search-button"].addEventListener("click", () => { state.recoveryPage = 1; loadRecoveryItems(); });
 elements["recovery-search"].addEventListener("keydown", event => {
   if (event.key === "Enter") { state.recoveryPage = 1; loadRecoveryItems(); }
@@ -425,6 +451,38 @@ elements["recovery-form"].addEventListener("submit", async event => {
     await loadRecoveryItems();
   } catch (error) {
     showError(error.message);
+  }
+});
+
+elements["import-convert-button"].addEventListener("click", () => elements["import-convert-file"].click());
+elements["import-convert-file"].addEventListener("change", async () => {
+  const file = elements["import-convert-file"].files[0];
+  if (!file) return;
+  clearError();
+  const form = new FormData();
+  form.append("file", file);
+  const button = elements["import-convert-button"];
+  button.disabled = true;
+  button.textContent = "正在读取数据库并转换...";
+  elements["import-convert-result"].textContent = file.name;
+  try {
+    const response = await fetch("/api/adm-import/convert", {method: "POST", body: form});
+    if (!response.ok) {
+      const contentType = response.headers.get("content-type") || "";
+      const body = contentType.includes("application/json") ? await response.json() : null;
+      throw new Error(body?.message || `转换失败：${response.status}`);
+    }
+    const filename = responseFilename(response, `ADM管理导入_${new Date().toISOString().slice(0, 10).replaceAll("-", "")}.xlsx`);
+    downloadBlob(await response.blob(), filename);
+    elements["import-convert-result"].textContent = `已生成：${filename}`;
+    showSuccess("转换完成。请核对下载文件后导入ADM管理系统。");
+  } catch (error) {
+    elements["import-convert-result"].textContent = "转换未完成";
+    showError(error.message);
+  } finally {
+    elements["import-convert-file"].value = "";
+    button.disabled = false;
+    button.textContent = "选择文件并转换";
   }
 });
 
