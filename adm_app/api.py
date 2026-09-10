@@ -312,3 +312,29 @@ def update_recovery(item_id: int):
     if not handler or len(handler) > 64:
         raise AppError("处理人不能为空且长度不能超过64")
     return _success(_recovery().update(item_id, status, remark, handler), "恢复状态已更新")
+
+
+@api.patch("/recovery/<int:item_id>/code")
+def update_recovery_code(item_id: int):
+    body = request.get_json(silent=True) or {}
+    recovery_code = str(body.get("recoveryCode") or "").strip().upper()
+    handler = str(body.get("handler") or "").strip()
+    if not recovery_code:
+        raise AppError("恢复编码不能为空；不需要该记录时请使用删除")
+    if len(recovery_code) > 64:
+        raise AppError("恢复编码不能超过64位")
+    if not handler or len(handler) > 64:
+        raise AppError("处理人不能为空且长度不能超过64")
+    item = _recovery().update_code(item_id, recovery_code, handler)
+    message = "恢复编码已修改并重置为待恢复" if item["codeChanged"] else "恢复编码未发生变化"
+    return _success(item, message)
+
+
+@api.delete("/recovery/<int:item_id>")
+def delete_recovery(item_id: int):
+    body = request.get_json(silent=True) or {}
+    handler = str(body.get("handler") or "").strip()
+    if not handler or len(handler) > 64:
+        raise AppError("处理人不能为空且长度不能超过64")
+    item = _recovery().delete(item_id)
+    return _success({"id": item_id, "admNo": item["adm_no"], "deletedBy": handler}, "恢复编码记录已删除")

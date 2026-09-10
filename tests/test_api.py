@@ -89,6 +89,8 @@ def test_export_returns_valid_workbook(client):
         "申诉原因",
         "申诉结果",
         "结案处理结果",
+        "系统",
+        "PCC",
         "恢复编码",
     ]
     assert sheet["L5"].value is None
@@ -100,8 +102,14 @@ def test_export_returns_valid_workbook(client):
     assert sheet["M5"].fill.fgColor.rgb.endswith("FFF2B2")
     assert sheet["S5"].fill.fgColor.rgb.endswith("FFF2B2")
     assert sheet["W5"].value is None
+    assert sheet["X5"].value is None
+    assert sheet["Y5"].value is None
     assert sheet["W5"].fill.fgColor.rgb.endswith("FFF2B2")
+    assert sheet["X5"].fill.fgColor.rgb.endswith("FFF2B2")
+    assert sheet["Y5"].fill.fgColor.rgb.endswith("FFF2B2")
     assert sheet["W5"].number_format == "@"
+    assert sheet["X5"].number_format == "@"
+    assert sheet["Y5"].number_format == "@"
 
 
 def test_wecom_send_is_disabled_by_default(client):

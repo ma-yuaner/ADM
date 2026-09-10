@@ -55,6 +55,8 @@ def test_business_return_converts_to_complete_adm_import(client):
         "申诉状态": "不提交可结案",
         "申诉原因": "业务确认不申诉",
         "结案处理结果": "待ADM专员审核",
+        "系统": "BSP",
+        "PCC": "SZX173",
         "恢复编码": "PNR8X2",
     })
 
@@ -73,6 +75,8 @@ def test_business_return_converts_to_complete_adm_import(client):
     assert "原系统备注" in remark
     assert "确认=资料不全" in remark
     assert "进度=已录入差异" in remark
+    assert "系统=BSP" in remark
+    assert "PCC=SZX173" in remark
     assert "恢复编码=PNR8X2" in remark
     assert sheet.auto_filter.ref.startswith("A1:AL")
     assert sheet.freeze_panes == "A2"
@@ -100,3 +104,13 @@ def test_missing_adm_stops_conversion(client):
     assert response.status_code == 400
     assert "数据库中未找到有效ADM" in response.get_json()["message"]
 
+
+def test_existing_long_remark_is_preserved(client, repository):
+    repository.rows[0]["remark"] = "历史备注" * 1000
+    workbook = _business_workbook(client)
+    response = _post_workbook(client, workbook)
+    output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
+    remark = sheet.cell(row_number, headers["备注"]).value
+    assert remark.startswith("历史备注" * 1000)
+    assert "[工作台回传]" in remark
+    output.close()

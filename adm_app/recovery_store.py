@@ -169,3 +169,39 @@ class RecoveryStore:
                 "SELECT * FROM adm_recovery_followup WHERE id = ?", (item_id,)
             ).fetchone()
         return self._serialize(row)
+
+    def update_code(self, item_id: int, recovery_code: str, handler: str) -> dict:
+        now = datetime.now().replace(microsecond=0).isoformat(sep=" ")
+        with self._connect() as connection:
+            existing = connection.execute(
+                "SELECT recovery_code FROM adm_recovery_followup WHERE id = ?", (item_id,)
+            ).fetchone()
+            if existing is None:
+                raise AppError("恢复编码记录不存在", 404)
+            changed = existing["recovery_code"] != recovery_code
+            if changed:
+                connection.execute(
+                    """
+                    UPDATE adm_recovery_followup
+                    SET recovery_code = ?, status = 'PENDING', remark = '',
+                        handled_by = ?, handled_at = NULL, update_time = ?
+                    WHERE id = ?
+                    """,
+                    (recovery_code, handler, now, item_id),
+                )
+            row = connection.execute(
+                "SELECT * FROM adm_recovery_followup WHERE id = ?", (item_id,)
+            ).fetchone()
+        item = self._serialize(row)
+        item["codeChanged"] = changed
+        return item
+
+    def delete(self, item_id: int) -> dict:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM adm_recovery_followup WHERE id = ?", (item_id,)
+            ).fetchone()
+            if row is None:
+                raise AppError("恢复编码记录不存在", 404)
+            connection.execute("DELETE FROM adm_recovery_followup WHERE id = ?", (item_id,))
+        return self._serialize(row)

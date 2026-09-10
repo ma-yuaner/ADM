@@ -34,6 +34,8 @@ DEFAULT_COLUMNS = [
     {"key": "appealReason", "label": "申诉原因"},
     {"key": "appealResultName", "label": "申诉结果"},
     {"key": "resolution", "label": "结案处理结果"},
+    {"key": "system", "label": "系统"},
+    {"key": "pcc", "label": "PCC"},
     {"key": "recoveryCode", "label": "恢复编码"},
 ]
 
@@ -112,7 +114,7 @@ class ExcelExportService:
         editable_keys = {
             "differenceDescription", "confirmation", "actualOwner", "handlingProgress",
             "appealSubmissionStatus", "appealReason", "appealResultName", "resolution",
-            "recoveryCode",
+            "system", "pcc", "recoveryCode",
         }
         editable_columns = {
             column["key"]: index
@@ -230,6 +232,7 @@ class ExcelExportService:
             "transferCount": 10, "transferStatus": 17,
             "handlingProgress": 15, "appealSubmissionStatus": 18,
             "appealReason": 32, "appealResultName": 14, "resolution": 32,
+            "system": 16, "pcc": 16,
             "recoveryCode": 18,
         }
         for column_index, column in enumerate(columns, start=1):
@@ -246,7 +249,7 @@ class ExcelExportService:
                 for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "#,##0.00"
                     cell[0].alignment = Alignment(horizontal="right", vertical="top")
-            elif key == "recoveryCode":
+            elif key in {"system", "pcc", "recoveryCode"}:
                 for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "@"
 

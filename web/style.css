@@ -107,6 +107,8 @@ tbody tr:hover { background: var(--surface-soft); }
 .conversion-rules ul { margin: 10px 0 0; padding-left: 19px; }
 .conversion-rules li + li { margin-top: 8px; }
 .row-action { padding: 5px; border: 0; color: var(--brand); background: transparent; cursor: pointer; }
+.row-actions { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.row-action-danger { color: var(--danger); }
 .empty-state { padding: 32px 16px; color: var(--muted); text-align: center; }
 .table-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .pager { display: flex; align-items: center; gap: 8px; }

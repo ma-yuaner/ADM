@@ -217,7 +217,7 @@ function renderRecoveryItems(data) {
       <td>${escapeHtml(formatDateTime(item.import_time))}</td>
       <td><span class="badge ${statusClass[item.status] || "badge-normal"}">${escapeHtml(item.statusName)}</span></td>
       <td class="remark-cell">${escapeHtml(item.remark || "-")}</td>
-      <td><button class="row-action" type="button" data-recovery-edit="${item.id}" data-adm-no="${escapeHtml(item.adm_no)}" data-status="${escapeHtml(item.status)}" data-remark="${escapeHtml(item.remark || "")}">更新进度</button></td>
+      <td><span class="row-actions"><button class="row-action" type="button" data-recovery-edit="${item.id}" data-adm-no="${escapeHtml(item.adm_no)}" data-status="${escapeHtml(item.status)}" data-remark="${escapeHtml(item.remark || "")}">更新进度</button><button class="row-action" type="button" data-recovery-code-edit="${item.id}" data-adm-no="${escapeHtml(item.adm_no)}" data-recovery-code="${escapeHtml(item.recovery_code)}">修改编码</button><button class="row-action row-action-danger" type="button" data-recovery-delete="${item.id}" data-adm-no="${escapeHtml(item.adm_no)}">删除</button></span></td>
     </tr>
   `).join("");
   elements["recovery-loading"].hidden = true;
@@ -427,9 +427,48 @@ elements["recovery-file"].addEventListener("change", async () => {
     button.textContent = "导入填写后的Excel";
   }
 });
-elements["recovery-body"].addEventListener("click", event => {
+elements["recovery-body"].addEventListener("click", async event => {
   const button = event.target.closest("[data-recovery-edit]");
-  if (button) openRecoveryDialog(button);
+  if (button) {
+    openRecoveryDialog(button);
+    return;
+  }
+  const codeButton = event.target.closest("[data-recovery-code-edit]");
+  if (codeButton) {
+    const input = window.prompt(`修改ADM ${codeButton.dataset.admNo}的恢复编码`, codeButton.dataset.recoveryCode || "");
+    if (input === null) return;
+    const recoveryCode = input.trim().toUpperCase();
+    if (!recoveryCode) {
+      showError("恢复编码不能为空；不需要该记录时请点击删除。");
+      return;
+    }
+    try {
+      const result = await api(`/api/recovery/${codeButton.dataset.recoveryCodeEdit}/code`, {
+        method: "PATCH",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({recoveryCode, handler: state.person || "ADM专员"}),
+      });
+      showSuccess(result.codeChanged ? "恢复编码已修改，并重新转为待恢复。" : "恢复编码未发生变化。");
+      await loadRecoveryItems();
+    } catch (error) {
+      showError(error.message);
+    }
+    return;
+  }
+  const deleteButton = event.target.closest("[data-recovery-delete]");
+  if (!deleteButton) return;
+  if (!window.confirm(`确认删除ADM ${deleteButton.dataset.admNo}的恢复编码跟进记录？删除后可通过重新导入Excel恢复。`)) return;
+  try {
+    await api(`/api/recovery/${deleteButton.dataset.recoveryDelete}`, {
+      method: "DELETE",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({handler: state.person || "ADM专员"}),
+    });
+    showSuccess("恢复编码记录已删除。");
+    await loadRecoveryItems();
+  } catch (error) {
+    showError(error.message);
+  }
 });
 elements["recovery-dialog-cancel"].addEventListener("click", () => elements["recovery-dialog"].close());
 elements["recovery-form"].addEventListener("submit", async event => {

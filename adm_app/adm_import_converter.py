@@ -88,7 +88,6 @@ FIELD_LIMITS = {
     "actual_owner": 64,
     "appeal_reason": 800,
     "resolution": 800,
-    "remark": 200,
 }
 
 
@@ -167,7 +166,7 @@ class AdmImportConverter:
                     for label, index in header_map.items()
                     if label in {
                         "当前阶段", "是否确认", "最近转单时间", "转单前责任人",
-                        "转单次数", "转单状态", "处理进度", "恢复编码",
+                        "转单次数", "转单状态", "处理进度", "系统", "PCC", "恢复编码",
                     }
                 }
                 parsed = WorkbenchRow(row_number, adm_no, values, context)
@@ -263,6 +262,8 @@ class AdmImportConverter:
             "转单次数": "转单数",
             "转单状态": "转单状态",
             "处理进度": "进度",
+            "系统": "系统",
+            "PCC": "PCC",
             "恢复编码": "恢复编码",
         }
         for label, alias in aliases.items():
