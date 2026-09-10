@@ -95,6 +95,14 @@ def serialize_task(row: dict, now: datetime | None = None) -> dict:
     transfer_waiting = bool(row.get("transfer_awaiting_acceptance"))
     transfer_age_hours = None
     transfer_status = ""
+    default_handling_progress = (
+        "已录入差异" if text_value(row.get("diff_detail_reason")) else "未录入差异"
+    )
+    handling_progress = (
+        text_value(row.get("finance_handling_progress"))
+        if row.get("finance_diff_checked")
+        else default_handling_progress
+    )
     if isinstance(last_transfer_time, datetime):
         transfer_age_hours = round(max(0, (now - last_transfer_time).total_seconds() / 3600), 2)
         if transfer_waiting:
@@ -135,7 +143,14 @@ def serialize_task(row: dict, now: datetime | None = None) -> dict:
         "alertText": alert_text,
         "differenceDescription": text_value(row.get("diff_detail_reason")),
         "confirmation": "",
-        "handlingProgress": "已录入差异" if text_value(row.get("diff_detail_reason")) else "未录入差异",
+        # 保留原有“差异说明是否填写”的判断。启用财务核验后，导出值使用财务匹配结果。
+        "handlingProgressDefault": default_handling_progress,
+        "handlingProgress": handling_progress,
+        "financeDiffChecked": bool(row.get("finance_diff_checked")),
+        "financeDiffCount": int(row.get("finance_diff_count") or 0),
+        "financeDiffCreators": row.get("finance_diff_creators") or [],
+        "financeDiffDutyPersons": row.get("finance_diff_duty_persons") or [],
+        "financeDiffOwnerMatch": bool(row.get("finance_diff_owner_match")),
         "appealSubmissionStatus": appeal_submission_name(row),
         "appealReason": text_value(row.get("appeal_reason")),
         "appealResultName": appeal_result_name(row.get("appeal_result")),

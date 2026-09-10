@@ -14,6 +14,7 @@ from sqlalchemy.engine import Engine
 
 from .domain import alert_info, serialize_task, stage_code
 from .errors import AppError
+from .finance_diff import FinanceDiffLookup, apply_finance_diff_status
 
 
 TASK_COLUMNS = """
@@ -110,15 +111,29 @@ class AdmRepository(ABC):
 class MySQLAdmRepository(AdmRepository):
     mode = "mysql"
 
-    def __init__(self, engine: Engine, write_enabled: bool, operator_id: int = 0):
+    def __init__(
+        self,
+        engine: Engine,
+        write_enabled: bool,
+        operator_id: int = 0,
+        finance_diff_lookup: FinanceDiffLookup | None = None,
+    ):
         self.engine = engine
         self.write_enabled = write_enabled
         self.operator_id = operator_id
+        self.finance_diff_lookup = finance_diff_lookup
 
     def health(self) -> dict:
         with self.engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-        return {"database": "UP", "writeEnabled": self.write_enabled}
+        finance_database = (
+            self.finance_diff_lookup.health() if self.finance_diff_lookup else "DISABLED"
+        )
+        return {
+            "database": "UP",
+            "financeDatabase": finance_database,
+            "writeEnabled": self.write_enabled,
+        }
 
     def people(self) -> list[str]:
         sql = text(
@@ -190,6 +205,9 @@ class MySQLAdmRepository(AdmRepository):
                     for log in connection.execute(log_sql, {"adm_ids": [row["id"] for row in rows]})
                 ]
                 attach_transfer_history(rows, logs)
+
+        if self.finance_diff_lookup:
+            self.finance_diff_lookup.attach(rows)
 
         tasks = [serialize_task(row) for row in rows]
         if filters.get("alert"):
@@ -330,6 +348,10 @@ class MockAdmRepository(AdmRepository):
             self._row(106, "ADM-260909-006", "QUNAR", "26090548277", "CX", 2760, "HKD", "黄娜娟", "李志君", 1, None, now + timedelta(hours=18), now - timedelta(hours=1)),
             self._row(107, "ADM-260909-007", "CTRIP", "26090981120", "ZH", 1320, "CNY", "李志君", "", 0, 0, now + timedelta(days=4), now - timedelta(hours=3)),
         ]
+        self.finance_records = {
+            "ADM-260909-001": [{"create_user_name": "黄娜娟", "duty_person": ""}],
+            "ADM-260909-002": [{"create_user_name": "黄娜娟", "duty_person": ""}],
+        }
 
     @staticmethod
     def _row(id_, adm_no, source, order, airline, amount, currency, owner, actual_owner, lock_flag, adm_status, deadline, updated):
@@ -350,7 +372,7 @@ class MockAdmRepository(AdmRepository):
         }
 
     def health(self) -> dict:
-        return {"database": "MOCK", "writeEnabled": True}
+        return {"database": "MOCK", "financeDatabase": "MOCK", "writeEnabled": True}
 
     def people(self) -> list[str]:
         values = {"曾芸芸", "黄娜娟", "李志君", "马远尔"}
@@ -374,6 +396,7 @@ class MockAdmRepository(AdmRepository):
         if query:
             rows = [row for row in rows if query in row["adm_no"].lower() or query in row["ota_order_no"].lower() or query in row["ticket_no"].lower()]
 
+        apply_finance_diff_status(rows, self.finance_records)
         tasks = [serialize_task(row) for row in rows if row.get("status") == 1 and row.get("adm_status") != 3]
         if filters.get("alert"):
             tasks = [item for item in tasks if item["alertLevel"] == filters["alert"]]
@@ -443,29 +466,77 @@ def _repo_engine(project_dir: Path) -> Engine:
     return erp_config.get_connect()
 
 
+def _repo_finance_engine(project_dir: Path) -> Engine:
+    repo_root = project_dir.parent
+    analysis_scripts = repo_root / "analysis" / "scripts"
+    for path in (repo_root, analysis_scripts):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+    from common_libs.config.db_config import fi_config
+
+    return fi_config.get_connect()
+
+
+def _mysql_engine(config: dict, prefix: str) -> Engine:
+    return create_engine(
+        "mysql+pymysql://",
+        creator=lambda: __import__("pymysql").connect(
+            host=config[f"{prefix}_HOST"],
+            port=config[f"{prefix}_PORT"],
+            user=config[f"{prefix}_USER"],
+            password=config[f"{prefix}_PASSWORD"],
+            database=config[f"{prefix}_DATABASE"],
+            charset="utf8mb4",
+            connect_timeout=15,
+            read_timeout=60,
+            write_timeout=60,
+        ),
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        pool_size=5,
+        max_overflow=5,
+    )
+
+
 def create_repository(config: dict, project_dir: Path) -> AdmRepository:
     mode = config["DATA_MODE"]
     if mode == "mock":
         return MockAdmRepository()
     if mode == "repo":
+        finance_lookup = (
+            FinanceDiffLookup(_repo_finance_engine(project_dir))
+            if config["FINANCE_DIFF_ENABLED"]
+            else None
+        )
         return MySQLAdmRepository(
-            _repo_engine(project_dir), config["WRITE_ENABLED"], config["OPERATOR_ID"]
+            _repo_engine(project_dir),
+            config["WRITE_ENABLED"],
+            config["OPERATOR_ID"],
+            finance_lookup,
         )
     if mode == "mysql":
         missing = [name for name in ("DB_HOST", "DB_USER", "DB_PASSWORD", "DB_DATABASE") if not config.get(name)]
         if missing:
             raise RuntimeError(f"mysql模式缺少配置：{', '.join(missing)}")
-        engine = create_engine(
-            "mysql+pymysql://",
-            creator=lambda: __import__("pymysql").connect(
-                host=config["DB_HOST"], port=config["DB_PORT"], user=config["DB_USER"],
-                password=config["DB_PASSWORD"], database=config["DB_DATABASE"], charset="utf8mb4",
-                connect_timeout=15, read_timeout=60, write_timeout=60,
-            ),
-            pool_pre_ping=True,
-            pool_recycle=1800,
-            pool_size=5,
-            max_overflow=5,
+        finance_lookup = None
+        if config["FINANCE_DIFF_ENABLED"]:
+            finance_missing = [
+                name
+                for name in (
+                    "FINANCE_DB_HOST", "FINANCE_DB_USER", "FINANCE_DB_PASSWORD",
+                    "FINANCE_DB_DATABASE",
+                )
+                if not config.get(name)
+            ]
+            if finance_missing:
+                raise RuntimeError(
+                    f"启用财务差异核验后缺少配置：{', '.join(finance_missing)}"
+                )
+            finance_lookup = FinanceDiffLookup(_mysql_engine(config, "FINANCE_DB"))
+        return MySQLAdmRepository(
+            _mysql_engine(config, "DB"),
+            config["WRITE_ENABLED"],
+            config["OPERATOR_ID"],
+            finance_lookup,
         )
-        return MySQLAdmRepository(engine, config["WRITE_ENABLED"], config["OPERATOR_ID"])
     raise RuntimeError("ADM_DATA_MODE仅支持mock、repo或mysql")

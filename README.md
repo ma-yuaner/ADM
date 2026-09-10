@@ -10,6 +10,7 @@
 - 关联操作日志展示最近转单时间、转单前后人员、转单次数及转单后未接单状态；
 - 将筛选后的不同平台数据统一导出到一个Excel工作表；
 - 向企业微信群发送所选人员的全部未结案ADM清单并@本人；
+- 核验财务差异库，导出“已录入差异 / 有差异单不是责任人录入 / 无差异单”；
 - 业务在Excel末列填写恢复编码后回传，ADM专员在“编码恢复”页跟进处理；
 - 不新增业务库表，ADM读取仍复用`adm_records`和`auto_issue_operator_log`。
 
@@ -18,6 +19,7 @@
 ```text
 浏览器 -> Flask API -> sibedb.adm_records
                     -> sibedb.auto_issue_operator_log
+                    -> ibf_prod_db.order_info_diff_reason（只读核验）
                     -> Excel下载
 ```
 
@@ -76,7 +78,24 @@ ADM_DB_PORT=3306
 ADM_DB_USER=数据库用户
 ADM_DB_PASSWORD=数据库密码
 ADM_DB_DATABASE=sibedb
+ADM_FINANCE_DIFF_ENABLED=true
+ADM_FINANCE_DB_HOST=财务数据库地址
+ADM_FINANCE_DB_PORT=3306
+ADM_FINANCE_DB_USER=财务只读用户
+ADM_FINANCE_DB_PASSWORD=财务数据库密码
+ADM_FINANCE_DB_DATABASE=ibf_prod_db
 ```
+
+财务核验的关联与责任人口径：
+
+```text
+adm_records.adm_no = order_info_diff_reason.ota_order_no
+order_info_diff_reason.status = 1
+ADM责任人 = actual_owner非空时取actual_owner，否则取owner
+差异单录入人 = order_info_diff_reason.create_user_name
+```
+
+启用后的“处理进度”：存在有效差异且任一`create_user_name`与ADM责任人一致为“已录入差异”；存在有效差异但录入人均不一致为“有差异单不是责任人录入”；没有有效差异为“无差异单”。`duty_person`当前业务数据大量为空，仅作为辅助信息，不参与是否本人录入的判断。未启用时保留原有的“差异说明是否填写”默认判断。
 
 ## 数据口径
 

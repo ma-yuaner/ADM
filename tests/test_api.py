@@ -8,6 +8,7 @@ def test_health(client):
     assert response.status_code == 200
     assert response.get_json()["data"]["status"] == "UP"
     assert response.get_json()["data"]["dataMode"] == "mock"
+    assert response.get_json()["data"]["financeDatabase"] == "MOCK"
 
 
 def test_team_tasks_and_summary(client):
@@ -91,7 +92,9 @@ def test_export_returns_valid_workbook(client):
         "恢复编码",
     ]
     assert sheet["L5"].value is None
-    assert sheet["R5"].value in {"已录入差异", "未录入差异"}
+    assert sheet["R5"].value in {
+        "已录入差异", "有差异单不是责任人录入", "无差异单"
+    }
     assert len(sheet.data_validations.dataValidation) == 1
     assert sheet["W5"].value is None
     assert sheet["W5"].fill.fgColor.rgb.endswith("FFF2B2")

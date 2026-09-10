@@ -20,6 +20,12 @@ ADM_DB_PORT=3306
 ADM_DB_USER=数据库用户
 ADM_DB_PASSWORD=数据库密码
 ADM_DB_DATABASE=sibedb
+ADM_FINANCE_DIFF_ENABLED=true
+ADM_FINANCE_DB_HOST=财务数据库地址
+ADM_FINANCE_DB_PORT=3306
+ADM_FINANCE_DB_USER=财务只读用户
+ADM_FINANCE_DB_PASSWORD=财务数据库密码
+ADM_FINANCE_DB_DATABASE=ibf_prod_db
 ADM_HTTP_PORT=5050
 ```
 
@@ -111,6 +117,12 @@ ADM_DB_PORT=3306
 ADM_DB_USER=数据库用户
 ADM_DB_PASSWORD=数据库密码
 ADM_DB_DATABASE=sibedb
+ADM_FINANCE_DIFF_ENABLED=true
+ADM_FINANCE_DB_HOST=财务数据库地址
+ADM_FINANCE_DB_PORT=3306
+ADM_FINANCE_DB_USER=财务只读用户
+ADM_FINANCE_DB_PASSWORD=财务数据库密码
+ADM_FINANCE_DB_DATABASE=ibf_prod_db
 ADM_LOG_LEVEL=INFO
 ADM_HTTP_PORT=5050
 ```
@@ -119,6 +131,7 @@ ADM_HTTP_PORT=5050
 
 - `adm_records`的SELECT权限；
 - `auto_issue_operator_log`的SELECT权限；
+- 财务库`ibf_prod_db.order_info_diff_reason`的SELECT权限；
 - 验证列表和导出阶段不需要UPDATE/INSERT权限。
 
 确认测试库分配流程后，再增加：
@@ -184,15 +197,16 @@ curl http://127.0.0.1:5050/api/health
 4. 按ADM单号抽查10张源表记录；
 5. 按CTRIP、QUNAR等数据源导出Excel；
 6. 审核各数据源字段和列顺序；
-7. 切换到测试数据库账号；
-8. 开启写入；
-9. 选择一张测试ADM完成转单；
-10. 核对`adm_records.actual_owner`；
-11. 核对`auto_issue_operator_log`日志内容和版本号；
-12. 运行流程快照ETL，确认该日志被识别为转单；
-13. 刷新工作台，确认列表和Excel显示最近转单时间、转单前责任人、转单次数和转单状态；
-14. 批量测试2至5张ADM；
-15. 业务确认后再考虑生产部署。
+7. 抽查“处理进度”：按`adm_no=order_info_diff_reason.ota_order_no`核验，并对比`actual_owner/owner`与`create_user_name`；
+8. 切换到测试数据库账号；
+9. 开启写入；
+10. 选择一张测试ADM完成转单；
+11. 核对`adm_records.actual_owner`；
+12. 核对`auto_issue_operator_log`日志内容和版本号；
+13. 运行流程快照ETL，确认该日志被识别为转单；
+14. 刷新工作台，确认列表和Excel显示最近转单时间、转单前责任人、转单次数和转单状态；
+15. 批量测试2至5张ADM；
+16. 业务确认后再考虑生产部署。
 
 ## 六、Nginx示例
 

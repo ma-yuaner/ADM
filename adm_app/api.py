@@ -78,6 +78,7 @@ def health():
         "status": "UP",
         "dataMode": _repository().mode,
         "database": state["database"],
+        "financeDatabase": state.get("financeDatabase", "DISABLED"),
         "writeEnabled": state["writeEnabled"],
         "time": datetime.now(),
     })

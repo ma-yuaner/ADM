@@ -29,6 +29,12 @@ class AppConfig:
     db_user: str
     db_password: str
     db_database: str
+    finance_diff_enabled: bool
+    finance_db_host: str
+    finance_db_port: int
+    finance_db_user: str
+    finance_db_password: str
+    finance_db_database: str
     export_profiles_file: Path
     wecom_send_enabled: bool
     wecom_webhook_url: str
@@ -54,6 +60,12 @@ class AppConfig:
             db_user=os.getenv("ADM_DB_USER", ""),
             db_password=os.getenv("ADM_DB_PASSWORD", ""),
             db_database=os.getenv("ADM_DB_DATABASE", "sibedb"),
+            finance_diff_enabled=_bool_env("ADM_FINANCE_DIFF_ENABLED"),
+            finance_db_host=os.getenv("ADM_FINANCE_DB_HOST", ""),
+            finance_db_port=int(os.getenv("ADM_FINANCE_DB_PORT", "3306")),
+            finance_db_user=os.getenv("ADM_FINANCE_DB_USER", ""),
+            finance_db_password=os.getenv("ADM_FINANCE_DB_PASSWORD", ""),
+            finance_db_database=os.getenv("ADM_FINANCE_DB_DATABASE", "ibf_prod_db"),
             export_profiles_file=project_dir / os.getenv(
                 "ADM_EXPORT_PROFILES", "config/export_profiles.json"
             ),
@@ -84,6 +96,12 @@ class AppConfig:
             "DB_USER": self.db_user,
             "DB_PASSWORD": self.db_password,
             "DB_DATABASE": self.db_database,
+            "FINANCE_DIFF_ENABLED": self.finance_diff_enabled,
+            "FINANCE_DB_HOST": self.finance_db_host,
+            "FINANCE_DB_PORT": self.finance_db_port,
+            "FINANCE_DB_USER": self.finance_db_user,
+            "FINANCE_DB_PASSWORD": self.finance_db_password,
+            "FINANCE_DB_DATABASE": self.finance_db_database,
             "EXPORT_PROFILES_FILE": self.export_profiles_file,
             "WECOM_SEND_ENABLED": self.wecom_send_enabled,
             "WECOM_WEBHOOK_URL": self.wecom_webhook_url,
