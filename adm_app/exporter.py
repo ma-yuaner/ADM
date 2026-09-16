@@ -34,9 +34,7 @@ DEFAULT_COLUMNS = [
     {"key": "appealReason", "label": "申诉原因"},
     {"key": "appealResultName", "label": "申诉结果"},
     {"key": "resolution", "label": "结案处理结果"},
-    {"key": "system", "label": "系统"},
-    {"key": "pcc", "label": "PCC"},
-    {"key": "recoveryCode", "label": "恢复编码"},
+    {"key": "recoveryInfo", "label": "系统-PCC：恢复编码"},
 ]
 
 
@@ -63,6 +61,21 @@ class ExcelExportService:
         if isinstance(value, date):
             return value
         return "" if value is None else value
+
+    @staticmethod
+    def _export_value(item: dict, key: str):
+        if key == "appealReason":
+            # 申诉原因由业务人员在每次导出的新模板中重新填写，不预带历史值。
+            return ""
+        if key == "recoveryInfo":
+            system = str(item.get("system") or "").strip()
+            pcc = str(item.get("pcc") or "").strip()
+            recovery_code = str(item.get("recoveryCode") or "").strip()
+            prefix = "-".join(value for value in (system, pcc) if value)
+            if prefix and recovery_code:
+                return f"{prefix}：{recovery_code}"
+            return recovery_code or prefix
+        return item.get(key)
 
     def build(
         self,
@@ -109,12 +122,15 @@ class ExcelExportService:
         sheet.row_dimensions[header_row].height = 32
 
         for item in tasks:
-            sheet.append([self._cell_value(item.get(column["key"])) for column in columns])
+            sheet.append([
+                self._cell_value(self._export_value(item, column["key"]))
+                for column in columns
+            ])
 
         editable_keys = {
             "differenceDescription", "confirmation", "actualOwner", "handlingProgress",
             "appealSubmissionStatus", "appealReason", "appealResultName", "resolution",
-            "system", "pcc", "recoveryCode",
+            "recoveryInfo",
         }
         editable_columns = {
             column["key"]: index
@@ -132,7 +148,7 @@ class ExcelExportService:
         recovery_code_column = next(
             (
                 index for index, column in enumerate(columns, start=1)
-                if column["key"] == "recoveryCode"
+                if column["key"] == "recoveryInfo"
             ),
             None,
         )
@@ -232,8 +248,7 @@ class ExcelExportService:
             "transferCount": 10, "transferStatus": 17,
             "handlingProgress": 15, "appealSubmissionStatus": 18,
             "appealReason": 32, "appealResultName": 14, "resolution": 32,
-            "system": 16, "pcc": 16,
-            "recoveryCode": 18,
+            "recoveryInfo": 30,
         }
         for column_index, column in enumerate(columns, start=1):
             width = preferred_widths.get(column["key"], 15)
@@ -249,7 +264,7 @@ class ExcelExportService:
                 for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "#,##0.00"
                     cell[0].alignment = Alignment(horizontal="right", vertical="top")
-            elif key in {"system", "pcc", "recoveryCode"}:
+            elif key == "recoveryInfo":
                 for cell in sheet.iter_cols(min_col=column_index, max_col=column_index, min_row=data_start_row):
                     cell[0].number_format = "@"
 

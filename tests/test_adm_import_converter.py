@@ -68,9 +68,7 @@ def test_business_return_converts_to_complete_adm_import(client):
         "申诉状态": "不提交可结案",
         "申诉原因": "业务确认不申诉",
         "结案处理结果": "待ADM专员审核",
-        "系统": "BSP",
-        "PCC": "SZX173",
-        "恢复编码": "PNR8X2",
+        "系统-PCC：恢复编码": "BSP-SZX173：PNR8X2",
     })
 
     response = _post_workbook(client, workbook)
@@ -80,8 +78,8 @@ def test_business_return_converts_to_complete_adm_import(client):
     assert len(IMPORT_COLUMNS) == 38
     assert sheet.cell(row_number, headers["主键ID"]).value == 101
     assert sheet.cell(row_number, headers["实际责任人"]).value == "李志君"
-    assert sheet.cell(row_number, headers["处理状态"]).value == "待审核"
-    assert sheet.cell(row_number, headers["申诉状态"]).value == "不申诉"
+    assert sheet.cell(row_number, headers["处理状态"]).value == "待申诉"
+    assert sheet.cell(row_number, headers["申诉状态"]).value is None
     assert sheet.cell(row_number, headers["申诉结果"]).value is None
     assert sheet.cell(row_number, headers["细分差异原因（可备注，自由文本描述具体差异情况）"]).value == "业务确认：返点差异待处理"
     remark = sheet.cell(row_number, headers["备注"]).value
@@ -92,6 +90,8 @@ def test_business_return_converts_to_complete_adm_import(client):
     assert "PCC=SZX173" in remark
     assert "恢复编码=PNR8X2" in remark
     assert "恢复状态=未进入恢复跟进" in remark
+    assert "申诉原因=业务确认不申诉" in remark
+    assert sheet.cell(row_number, headers["申诉原因（status=申诉时必填）"]).value is None
     assert sheet.auto_filter.ref.startswith("A1:AL")
     assert sheet.freeze_panes == "A2"
     output.close()
@@ -99,7 +99,7 @@ def test_business_return_converts_to_complete_adm_import(client):
 
 def test_completed_recovery_status_is_merged_into_return_remark(client):
     workbook = _business_workbook(client)
-    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": "PNR8X2"})
+    _set_business_values(workbook, "ADM-260909-001", {"系统-PCC：恢复编码": "BSP-SZX173：PNR8X2"})
     item = _import_recovery(client, workbook)
     updated = client.patch(
         f"/api/recovery/{item['id']}",
@@ -117,13 +117,13 @@ def test_completed_recovery_status_is_merged_into_return_remark(client):
 
 def test_tracked_recovery_is_merged_when_return_workbook_code_is_blank(client):
     workbook = _business_workbook(client)
-    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": "PNR8X2"})
+    _set_business_values(workbook, "ADM-260909-001", {"系统-PCC：恢复编码": "BSP-SZX173：PNR8X2"})
     item = _import_recovery(client, workbook)
     client.patch(
         f"/api/recovery/{item['id']}",
         json={"status": "PROCESSING", "remark": "处理中", "handler": "曾芸芸"},
     )
-    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": ""})
+    _set_business_values(workbook, "ADM-260909-001", {"系统-PCC：恢复编码": ""})
 
     response = _post_workbook(client, workbook)
     output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
@@ -135,13 +135,13 @@ def test_tracked_recovery_is_merged_when_return_workbook_code_is_blank(client):
 
 def test_recovery_code_mismatch_is_explicit_in_return_remark(client):
     workbook = _business_workbook(client)
-    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": "PNR8X2"})
+    _set_business_values(workbook, "ADM-260909-001", {"系统-PCC：恢复编码": "BSP-SZX173：PNR8X2"})
     item = _import_recovery(client, workbook)
     client.patch(
         f"/api/recovery/{item['id']}",
         json={"status": "COMPLETED", "remark": "旧编码完成", "handler": "曾芸芸"},
     )
-    _set_business_values(workbook, "ADM-260909-001", {"恢复编码": "PNR-NEW"})
+    _set_business_values(workbook, "ADM-260909-001", {"系统-PCC：恢复编码": "BSP-SZX173：PNR-NEW"})
 
     response = _post_workbook(client, workbook)
     output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
@@ -165,6 +165,46 @@ def test_appeal_result_becomes_pending_audit(client):
     output.close()
 
 
+def test_confirmation_controls_appeal_status(client):
+    confirmed = _business_workbook(client)
+    _set_business_values(confirmed, "ADM-260909-001", {"是否确认": "确认"})
+    response = _post_workbook(client, confirmed)
+    output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
+    assert sheet.cell(row_number, headers["处理状态"]).value == "待审核"
+    assert sheet.cell(row_number, headers["申诉状态"]).value == "不申诉"
+    output.close()
+
+
+def test_legacy_three_recovery_columns_remain_importable(client):
+    workbook = _business_workbook(client)
+    sheet = workbook["ADM待处理"]
+    combined_column = next(
+        cell.column for cell in sheet[4] if cell.value == "系统-PCC：恢复编码"
+    )
+    sheet.cell(4, combined_column, "恢复编码")
+    sheet.cell(5, combined_column, "LEGACY01")
+    sheet.cell(4, combined_column + 1, "系统")
+    sheet.cell(5, combined_column + 1, "BSP")
+    sheet.cell(4, combined_column + 2, "PCC")
+    sheet.cell(5, combined_column + 2, "SZX173")
+
+    response = _post_workbook(client, workbook)
+    output, converted, row_number, headers = _converted_row(response, "ADM-260909-001")
+    remark = converted.cell(row_number, headers["备注"]).value
+    assert "系统=BSP" in remark
+    assert "PCC=SZX173" in remark
+    assert "恢复编码=LEGACY01" in remark
+    output.close()
+
+    incomplete = _business_workbook(client)
+    _set_business_values(incomplete, "ADM-260909-001", {"是否确认": "非我司订单"})
+    response = _post_workbook(client, incomplete)
+    output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
+    assert sheet.cell(row_number, headers["处理状态"]).value == "待申诉"
+    assert sheet.cell(row_number, headers["申诉状态"]).value is None
+    output.close()
+
+
 def test_missing_adm_stops_conversion(client):
     workbook = _business_workbook(client)
     _set_business_values(workbook, "ADM-260909-001", {"ADM单号": "ADM-NOT-FOUND"})
@@ -181,4 +221,22 @@ def test_existing_long_remark_is_preserved(client, repository):
     remark = sheet.cell(row_number, headers["备注"]).value
     assert remark.startswith("历史备注" * 1000)
     assert "[工作台回传]" in remark
+    output.close()
+
+
+def test_existing_workbench_remark_is_updated_by_field_without_losing_other_parts(client, repository):
+    repository.rows[0]["remark"] = (
+        "人工历史备注；[工作台回传]阶段=旧阶段；PCC=OLDPCC；自定义内容=继续保留"
+    )
+    workbook = _business_workbook(client)
+    _set_business_values(workbook, "ADM-260909-001", {"是否确认": "确认"})
+    response = _post_workbook(client, workbook)
+    output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
+    remark = sheet.cell(row_number, headers["备注"]).value
+    assert remark.startswith("人工历史备注；[工作台回传]")
+    assert "阶段=旧阶段" not in remark
+    assert "阶段=已分配未接单" in remark
+    assert "PCC=OLDPCC" in remark
+    assert "自定义内容=继续保留" in remark
+    assert "确认=确认" in remark
     output.close()

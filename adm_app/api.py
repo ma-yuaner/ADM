@@ -6,7 +6,12 @@ from io import BytesIO
 from flask import Blueprint, current_app, jsonify, request, send_file
 from openpyxl import load_workbook
 
-from .adm_import_converter import AdmImportConverter
+from .adm_import_converter import (
+    COMBINED_RECOVERY_HEADER,
+    LEGACY_RECOVERY_HEADERS,
+    AdmImportConverter,
+    parse_recovery_info,
+)
 from .errors import AppError
 from .exporter import ExcelExportService
 from .json_utils import json_ready
@@ -202,7 +207,14 @@ def import_recovery_codes():
         recovery_header = ""
         for row_number, row in enumerate(sheet.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
             current = {_excel_text(value): index for index, value in enumerate(row)}
-            recovery_header = "恢复编码" if "恢复编码" in current else ("编码" if "编码" in current else "")
+            recovery_header = next(
+                (
+                    label
+                    for label in (COMBINED_RECOVERY_HEADER, *LEGACY_RECOVERY_HEADERS)
+                    if label in current
+                ),
+                "",
+            )
             if "ADM单号" in current and recovery_header:
                 header_row = row_number
                 header_map = current
@@ -218,9 +230,10 @@ def import_recovery_codes():
             sheet.iter_rows(min_row=header_row + 1, values_only=True), start=header_row + 1
         ):
             adm_no = _excel_text(row[header_map["ADM单号"]] if header_map["ADM单号"] < len(row) else None)
-            recovery_code = _excel_text(
+            recovery_value = _excel_text(
                 row[header_map[recovery_header]] if header_map[recovery_header] < len(row) else None
-            ).upper()
+            )
+            recovery_code = parse_recovery_info(recovery_value).recovery_code
             if not adm_no and not recovery_code:
                 continue
             if not recovery_code:

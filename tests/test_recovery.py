@@ -8,7 +8,7 @@ def recovery_workbook(client, code="PNR8X2") -> BytesIO:
     workbook = load_workbook(BytesIO(response.data))
     sheet = workbook["ADM待处理"]
     headers = {cell.value: cell.column for cell in sheet[4]}
-    sheet.cell(5, headers["恢复编码"], code)
+    sheet.cell(5, headers["系统-PCC：恢复编码"], f"BSP-SZX173：{code}")
     output = BytesIO()
     workbook.save(output)
     workbook.close()
@@ -108,3 +108,24 @@ def test_manual_code_edit_resets_to_pending_and_can_delete(client):
     )
     assert deleted.status_code == 200
     assert client.get("/api/recovery").get_json()["data"]["pagination"]["total"] == 0
+
+
+def test_import_accepts_half_width_colon_in_combined_recovery_field(client):
+    workbook_stream = recovery_workbook(client, "mixed01")
+    workbook = load_workbook(workbook_stream)
+    sheet = workbook["ADM待处理"]
+    headers = {cell.value: cell.column for cell in sheet[4]}
+    sheet.cell(5, headers["系统-PCC：恢复编码"], "BSP-SZX173:mixed01")
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    output.seek(0)
+
+    response = client.post(
+        "/api/recovery/import",
+        data={"operator": "曾芸芸", "file": (output, "ADM.xlsx")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    item = client.get("/api/recovery").get_json()["data"]["items"][0]
+    assert item["recovery_code"] == "MIXED01"

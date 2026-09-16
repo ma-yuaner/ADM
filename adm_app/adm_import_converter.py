@@ -63,8 +63,9 @@ WORKBENCH_FIELDS = {
     "appeal_reason": "申诉原因",
     "appeal_result": "申诉结果",
     "resolution": "结案处理结果",
-    "recovery_code": "恢复编码",
 }
+COMBINED_RECOVERY_HEADER = "系统-PCC：恢复编码"
+LEGACY_RECOVERY_HEADERS = ("恢复编码", "编码")
 
 SUPPLIER_TYPE_NAMES = {1: "平台", 2: "航司", 3: "供应商"}
 CATEGORY_NAMES = {0: "票务", 1: "业务", 2: "客服"}
@@ -97,6 +98,33 @@ def _excel_text(value) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip()
+
+
+@dataclass(frozen=True)
+class RecoveryInfo:
+    system: str = ""
+    pcc: str = ""
+    recovery_code: str = ""
+
+
+def parse_recovery_info(value) -> RecoveryInfo:
+    """解析“系统-PCC：恢复编码”，同时兼容半角冒号及旧版纯编码。"""
+    text = _excel_text(value)
+    if not text:
+        return RecoveryInfo()
+
+    normalized = text.replace("：", ":")
+    if ":" not in normalized:
+        return RecoveryInfo(recovery_code=text.upper())
+
+    platform_part, recovery_code = normalized.split(":", 1)
+    platform_part = platform_part.strip()
+    recovery_code = recovery_code.strip().upper()
+    if "-" in platform_part:
+        system, pcc = platform_part.split("-", 1)
+    else:
+        system, pcc = platform_part, ""
+    return RecoveryInfo(system.strip(), pcc.strip(), recovery_code)
 
 
 def _enum_name(value, names: dict[int, str]) -> str:
@@ -161,6 +189,36 @@ class AdmImportConverter:
                     key: _excel_text(row[header_map[label]] if label in header_map and header_map[label] < len(row) else None)
                     for key, label in WORKBENCH_FIELDS.items()
                 }
+                combined_value = (
+                    row[header_map[COMBINED_RECOVERY_HEADER]]
+                    if COMBINED_RECOVERY_HEADER in header_map
+                    and header_map[COMBINED_RECOVERY_HEADER] < len(row)
+                    else None
+                )
+                recovery_info = parse_recovery_info(combined_value)
+                if COMBINED_RECOVERY_HEADER not in header_map:
+                    legacy_code = next(
+                        (
+                            _excel_text(row[header_map[label]])
+                            for label in LEGACY_RECOVERY_HEADERS
+                            if label in header_map and header_map[label] < len(row)
+                        ),
+                        "",
+                    )
+                    recovery_info = RecoveryInfo(
+                        system=_excel_text(
+                            row[header_map["系统"]]
+                            if "系统" in header_map and header_map["系统"] < len(row)
+                            else None
+                        ),
+                        pcc=_excel_text(
+                            row[header_map["PCC"]]
+                            if "PCC" in header_map and header_map["PCC"] < len(row)
+                            else None
+                        ),
+                        recovery_code=legacy_code.upper(),
+                    )
+                values["recovery_code"] = recovery_info.recovery_code
                 context = {
                     label: _excel_text(row[index] if index < len(row) else None)
                     for label, index in header_map.items()
@@ -169,6 +227,14 @@ class AdmImportConverter:
                         "转单次数", "转单状态", "处理进度", "系统", "PCC", "恢复编码",
                     }
                 }
+                if recovery_info.system:
+                    context["系统"] = recovery_info.system
+                if recovery_info.pcc:
+                    context["PCC"] = recovery_info.pcc
+                if recovery_info.recovery_code:
+                    context["恢复编码"] = recovery_info.recovery_code
+                if values["appeal_reason"]:
+                    context["申诉原因"] = values["appeal_reason"]
                 parsed = WorkbenchRow(row_number, adm_no, values, context)
                 if adm_no in seen:
                     previous = seen[adm_no]
@@ -221,8 +287,6 @@ class AdmImportConverter:
             merged["diff_detail_reason"] = values["difference_description"]
         if values["actual_owner"]:
             merged["actual_owner"] = values["actual_owner"]
-        if values["appeal_reason"]:
-            merged["appeal_reason"] = values["appeal_reason"]
         if values["resolution"]:
             merged["resolution"] = values["resolution"]
 
@@ -256,6 +320,21 @@ class AdmImportConverter:
             merged["appeal_status"] = 0
             merged["appeal_result"] = 0 if appeal_result == "申诉成功" else 1
 
+        confirmation = values["confirmation"]
+        if confirmation:
+            if confirmation == "确认":
+                merged["adm_status"] = 2
+                merged["appeal_status"] = 1
+                merged["appeal_result"] = None
+            elif confirmation in {"资料不全", "非我司订单"}:
+                merged["adm_status"] = 0
+                merged["appeal_status"] = None
+                merged["appeal_result"] = None
+            else:
+                raise AppError(
+                    f"第{workbench.row_number}行ADM {workbench.adm_no}的确认结果“{confirmation}”无效"
+                )
+
         context = dict(workbench.context)
         workbook_code = _excel_text(context.get("恢复编码")).upper()
         if recovery:
@@ -277,7 +356,6 @@ class AdmImportConverter:
 
     @staticmethod
     def _merge_remark(original: str, context: dict[str, str]) -> str:
-        compact = []
         aliases = {
             "当前阶段": "阶段",
             "是否确认": "确认",
@@ -286,21 +364,40 @@ class AdmImportConverter:
             "转单次数": "转单数",
             "转单状态": "转单状态",
             "处理进度": "进度",
+            "申诉原因": "申诉原因",
             "系统": "系统",
             "PCC": "PCC",
             "恢复编码": "恢复编码",
             "恢复状态": "恢复状态",
         }
+        updates: list[tuple[str, str]] = []
         for label, alias in aliases.items():
             value = context.get(label, "")
             if value:
-                compact.append(f"{alias}={value}")
-        generated = f"[工作台回传]{'；'.join(compact)}" if compact else ""
+                updates.append((alias, value))
 
-        base = original
         marker = "[工作台回传]"
-        if marker in base:
-            base = base.split(marker, 1)[0].rstrip("； ")
+        base = original
+        existing_parts: list[str] = []
+        if marker in original:
+            base, previous = original.split(marker, 1)
+            base = base.rstrip("； ")
+            existing_parts = [part.strip() for part in previous.split("；") if part.strip()]
+
+        positions: dict[str, int] = {}
+        for index, part in enumerate(existing_parts):
+            if "=" in part:
+                alias, _ = part.split("=", 1)
+                positions.setdefault(alias.strip(), index)
+        for alias, value in updates:
+            replacement = f"{alias}={value}"
+            if alias in positions:
+                existing_parts[positions[alias]] = replacement
+            else:
+                positions[alias] = len(existing_parts)
+                existing_parts.append(replacement)
+
+        generated = f"{marker}{'；'.join(existing_parts)}" if existing_parts else ""
         return "；".join(value for value in (base, generated) if value)
 
     @staticmethod
