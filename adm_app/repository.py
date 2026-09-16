@@ -197,6 +197,12 @@ class MySQLAdmRepository(AdmRepository):
         if filters.get("search"):
             params["search"] = f"%{filters['search']}%"
             where.append("(adm_no LIKE :search OR ota_order_no LIKE :search OR ticket_no LIKE :search)")
+        if filters.get("created_from"):
+            params["created_from"] = filters["created_from"]
+            where.append("create_time >= :created_from")
+        if filters.get("created_before"):
+            params["created_before"] = filters["created_before"]
+            where.append("create_time < :created_before")
 
         where_sql = " AND ".join(f"({item})" for item in where)
         sql = text(f"SELECT {TASK_COLUMNS} FROM adm_records WHERE {where_sql} ORDER BY adm_deadline IS NULL, adm_deadline, id DESC")
@@ -435,6 +441,10 @@ class MockAdmRepository(AdmRepository):
         query = filters.get("search", "").lower()
         if query:
             rows = [row for row in rows if query in row["adm_no"].lower() or query in row["ota_order_no"].lower() or query in row["ticket_no"].lower()]
+        if filters.get("created_from"):
+            rows = [row for row in rows if row.get("create_time") and row["create_time"] >= filters["created_from"]]
+        if filters.get("created_before"):
+            rows = [row for row in rows if row.get("create_time") and row["create_time"] < filters["created_before"]]
 
         apply_finance_diff_status(rows, self.finance_records)
         tasks = [serialize_task(row) for row in rows if row.get("status") == 1 and row.get("adm_status") != 3]

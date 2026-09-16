@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from io import BytesIO
 
 from flask import Blueprint, current_app, jsonify, request, send_file
@@ -56,6 +56,16 @@ def _positive_int(name: str, default: int, maximum: int) -> int:
     return value
 
 
+def _date_filter(name: str, label: str) -> datetime | None:
+    raw = (request.args.get(name) or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.combine(date.fromisoformat(raw), time.min)
+    except ValueError as error:
+        raise AppError(f"{label}格式无效，请使用YYYY-MM-DD") from error
+
+
 def _excel_text(value) -> str:
     if value is None:
         return ""
@@ -65,6 +75,10 @@ def _excel_text(value) -> str:
 
 
 def _task_filters(export: bool = False) -> dict:
+    created_from = _date_filter("createdFrom", "创建开始日期")
+    created_to = _date_filter("createdTo", "创建结束日期")
+    if created_from and created_to and created_from > created_to:
+        raise AppError("创建开始日期不能晚于结束日期")
     return {
         "scope": _clean_text("scope", 10) or "mine",
         "person": _clean_text("person", 64),
@@ -72,6 +86,8 @@ def _task_filters(export: bool = False) -> dict:
         "alert": _clean_text("alert", 16),
         "stage": _clean_text("stage", 50),
         "search": _clean_text("search", 100),
+        "created_from": created_from,
+        "created_before": created_to + timedelta(days=1) if created_to else None,
         "page": 1 if export else _positive_int("page", 1, 100000),
         "page_size": 10000 if export else _positive_int("pageSize", 20, 200),
     }
@@ -166,6 +182,8 @@ def send_wecom():
         "alert": "",
         "stage": "",
         "search": "",
+        "created_from": None,
+        "created_before": None,
         "page": 1,
         "page_size": 10000,
     })

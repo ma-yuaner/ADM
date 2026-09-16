@@ -19,7 +19,8 @@ const state = {
 const elements = Object.fromEntries([
   "environment-badge", "sync-time", "person-select", "view-title", "view-description",
   "stat-open", "stat-unassigned", "stat-assigned", "stat-overdue", "stat-due",
-  "source-filter", "alert-filter", "search-input", "search-button", "batch-assign-button",
+  "source-filter", "alert-filter", "created-from-filter", "created-to-filter",
+  "search-input", "search-button", "batch-assign-button",
   "export-button", "wecom-send-button", "selection-bar", "selected-count", "success-message", "error-banner",
   "select-all", "task-body", "loading", "empty-state", "result-count", "previous-page",
   "next-page", "page-label", "assign-dialog", "assign-form", "assign-description",
@@ -99,6 +100,8 @@ function buildQuery(exportMode = false) {
   const params = new URLSearchParams({scope: state.scope, person: state.person});
   if (elements["source-filter"].value) params.set("source", elements["source-filter"].value);
   if (elements["alert-filter"].value) params.set("alert", elements["alert-filter"].value);
+  if (elements["created-from-filter"].value) params.set("createdFrom", elements["created-from-filter"].value);
+  if (elements["created-to-filter"].value) params.set("createdTo", elements["created-to-filter"].value);
   if (elements["search-input"].value.trim()) params.set("search", elements["search-input"].value.trim());
   if (!exportMode) {
     params.set("page", state.page);
@@ -317,6 +320,21 @@ elements["search-button"].addEventListener("click", () => { state.page = 1; stat
 elements["search-input"].addEventListener("keydown", event => { if (event.key === "Enter") { state.page = 1; state.selected.clear(); loadTasks(); } });
 elements["source-filter"].addEventListener("change", () => { state.page = 1; state.selected.clear(); loadTasks(); });
 elements["alert-filter"].addEventListener("change", () => { state.page = 1; state.selected.clear(); loadTasks(); });
+function applyCreatedDateFilter() {
+  const createdFrom = elements["created-from-filter"].value;
+  const createdTo = elements["created-to-filter"].value;
+  elements["created-to-filter"].min = createdFrom;
+  elements["created-from-filter"].max = createdTo;
+  if (createdFrom && createdTo && createdFrom > createdTo) {
+    showError("创建开始日期不能晚于结束日期");
+    return;
+  }
+  state.page = 1;
+  state.selected.clear();
+  loadTasks();
+}
+elements["created-from-filter"].addEventListener("change", applyCreatedDateFilter);
+elements["created-to-filter"].addEventListener("change", applyCreatedDateFilter);
 elements["previous-page"].addEventListener("click", () => { if (state.page > 1) { state.page -= 1; state.selected.clear(); loadTasks(); } });
 elements["next-page"].addEventListener("click", () => { if (state.page * state.pageSize < state.total) { state.page += 1; state.selected.clear(); loadTasks(); } });
 elements["select-all"].addEventListener("change", event => {
@@ -360,6 +378,12 @@ elements["assign-form"].addEventListener("submit", async event => {
   }
 });
 elements["export-button"].addEventListener("click", () => {
+  const createdFrom = elements["created-from-filter"].value;
+  const createdTo = elements["created-to-filter"].value;
+  if (createdFrom && createdTo && createdFrom > createdTo) {
+    showError("创建开始日期不能晚于结束日期");
+    return;
+  }
   window.location.href = `/api/export?${buildQuery(true)}`;
 });
 elements["wecom-send-button"].addEventListener("click", async () => {

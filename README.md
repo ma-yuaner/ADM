@@ -207,6 +207,8 @@ person=人员姓名
 source=ota_code
 alert=P0|P1|P2|NORMAL
 search=ADM单号、OTA订单号或票号
+createdFrom=创建开始日期（YYYY-MM-DD，包含当天）
+createdTo=创建结束日期（YYYY-MM-DD，包含当天）
 page=1
 pageSize=20
 ```

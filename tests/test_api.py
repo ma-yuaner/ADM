@@ -1,3 +1,4 @@
+from datetime import datetime
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -26,6 +27,46 @@ def test_my_tasks_respect_actual_owner(client):
     data = response.get_json()["data"]
     assert data["pagination"]["total"] == 2
     assert all(item["primaryOwner"] == "马远尔" for item in data["items"])
+
+
+def test_tasks_filter_by_inclusive_creation_date_range(client, repository):
+    for index, row in enumerate(repository.rows):
+        row["create_time"] = datetime(2026, 9, 10 + index, 12, 0)
+    repository.rows[1]["create_time"] = datetime(2026, 9, 11, 23, 59, 59)
+
+    response = client.get(
+        "/api/tasks?scope=all&createdFrom=2026-09-10&createdTo=2026-09-11"
+    )
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["pagination"]["total"] == 2
+    assert {item["id"] for item in data["items"]} == {101, 102}
+
+
+def test_tasks_reject_reversed_or_invalid_creation_dates(client):
+    reversed_range = client.get(
+        "/api/tasks?scope=all&createdFrom=2026-09-12&createdTo=2026-09-11"
+    )
+    assert reversed_range.status_code == 400
+    assert "开始日期不能晚于结束日期" in reversed_range.get_json()["message"]
+
+    invalid_date = client.get("/api/tasks?scope=all&createdFrom=2026-02-30")
+    assert invalid_date.status_code == 400
+    assert "格式无效" in invalid_date.get_json()["message"]
+
+
+def test_export_respects_creation_date_range(client, repository):
+    for index, row in enumerate(repository.rows):
+        row["create_time"] = datetime(2026, 9, 10 + index, 12, 0)
+    response = client.get(
+        "/api/export?scope=all&createdFrom=2026-09-12&createdTo=2026-09-12"
+    )
+    assert response.status_code == 200
+    workbook = load_workbook(BytesIO(response.data), data_only=True)
+    sheet = workbook["ADM待处理"]
+    assert sheet.max_row == 5
+    assert sheet["A5"].value == "ADM-260909-003"
+    workbook.close()
 
 
 def test_assign_updates_mock_repository(client):
