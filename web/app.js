@@ -19,7 +19,8 @@ const state = {
 const elements = Object.fromEntries([
   "environment-badge", "sync-time", "person-select", "view-title", "view-description",
   "stat-open", "stat-unassigned", "stat-assigned", "stat-overdue", "stat-due",
-  "source-filter", "alert-filter", "created-from-filter", "created-to-filter",
+  "source-filter", "stage-filter", "alert-filter", "created-from-filter", "created-to-filter",
+  "wecom-send-mode", "wecom-send-mode-field",
   "search-input", "search-button", "batch-assign-button",
   "export-button", "wecom-send-button", "selection-bar", "selected-count", "success-message", "error-banner",
   "select-all", "task-body", "loading", "empty-state", "result-count", "previous-page",
@@ -64,6 +65,7 @@ function switchPage(mode) {
   elements["recovery-nav"].classList.toggle("active", recovery);
   elements["import-convert-nav"].classList.toggle("active", conversion);
   elements["wecom-send-button"].hidden = !assignment;
+  elements["wecom-send-mode-field"].hidden = !assignment;
   if (recovery) loadRecoveryItems();
 }
 
@@ -100,6 +102,7 @@ function buildQuery(exportMode = false) {
   const params = new URLSearchParams({scope: state.scope, person: state.person});
   if (elements["source-filter"].value) params.set("source", elements["source-filter"].value);
   if (elements["alert-filter"].value) params.set("alert", elements["alert-filter"].value);
+  if (elements["stage-filter"].value) params.set("stage", elements["stage-filter"].value);
   if (elements["created-from-filter"].value) params.set("createdFrom", elements["created-from-filter"].value);
   if (elements["created-to-filter"].value) params.set("createdTo", elements["created-to-filter"].value);
   if (elements["search-input"].value.trim()) params.set("search", elements["search-input"].value.trim());
@@ -277,12 +280,13 @@ async function initialize() {
     state.people = people.items;
     state.writeEnabled = Boolean(health.writeEnabled);
     state.wecomEnabled = Boolean(config.wecomEnabled);
+    elements["stage-filter"].innerHTML = `<option value="">全部阶段</option>${config.stages.map(stage => `<option value="${escapeHtml(stage.code)}">${escapeHtml(stage.name)}</option>`).join("")}`;
     renderPeople(config.defaultPerson);
     elements["environment-badge"].textContent = health.dataMode === "mock" ? "演示数据" : (health.writeEnabled ? "数据库已连接 · 可写" : "数据库已连接 · 只读");
     elements["environment-badge"].classList.toggle("live", health.dataMode !== "mock");
     elements["wecom-send-button"].disabled = !state.wecomEnabled;
     elements["wecom-send-button"].title = state.wecomEnabled
-      ? "发送该人员全部未结案ADM清单到企业微信群并@本人"
+      ? "发送当前筛选结果或勾选订单到企业微信群，并@当前查看人员"
       : "请先在服务器配置企业微信机器人";
     await loadTasks();
   } catch (error) {
@@ -320,6 +324,7 @@ elements["search-button"].addEventListener("click", () => { state.page = 1; stat
 elements["search-input"].addEventListener("keydown", event => { if (event.key === "Enter") { state.page = 1; state.selected.clear(); loadTasks(); } });
 elements["source-filter"].addEventListener("change", () => { state.page = 1; state.selected.clear(); loadTasks(); });
 elements["alert-filter"].addEventListener("change", () => { state.page = 1; state.selected.clear(); loadTasks(); });
+elements["stage-filter"].addEventListener("change", () => { state.page = 1; state.selected.clear(); loadTasks(); });
 function applyCreatedDateFilter() {
   const createdFrom = elements["created-from-filter"].value;
   const createdTo = elements["created-to-filter"].value;
@@ -335,8 +340,8 @@ function applyCreatedDateFilter() {
 }
 elements["created-from-filter"].addEventListener("change", applyCreatedDateFilter);
 elements["created-to-filter"].addEventListener("change", applyCreatedDateFilter);
-elements["previous-page"].addEventListener("click", () => { if (state.page > 1) { state.page -= 1; state.selected.clear(); loadTasks(); } });
-elements["next-page"].addEventListener("click", () => { if (state.page * state.pageSize < state.total) { state.page += 1; state.selected.clear(); loadTasks(); } });
+elements["previous-page"].addEventListener("click", () => { if (state.page > 1) { state.page -= 1; loadTasks(); } });
+elements["next-page"].addEventListener("click", () => { if (state.page * state.pageSize < state.total) { state.page += 1; loadTasks(); } });
 elements["select-all"].addEventListener("change", event => {
   document.querySelectorAll(".row-check").forEach(check => {
     check.checked = event.target.checked;
@@ -388,15 +393,21 @@ elements["export-button"].addEventListener("click", () => {
 });
 elements["wecom-send-button"].addEventListener("click", async () => {
   if (!state.person || !state.wecomEnabled) return;
-  if (!window.confirm(`确认发送${state.person}全部未结案ADM清单到企业微信？`)) return;
+  const mode = elements["wecom-send-mode"].value;
+  const count = mode === "selected" ? state.selected.size : state.total;
+  if (!count) { showError(mode === "selected" ? "请先勾选需要发送的订单" : "当前筛选结果为空"); return; }
+  const createdFrom = elements["created-from-filter"].value;
+  const createdTo = elements["created-to-filter"].value;
+  if (createdFrom && createdTo && createdFrom > createdTo) { showError("创建开始日期不能晚于结束日期"); return; }
+  if (!window.confirm(`确认发送${mode === "selected" ? "勾选的" : "当前筛选结果（全部页）共"}${count}张ADM到企业微信群，并提醒${state.person}？`)) return;
   const button = elements["wecom-send-button"];
   button.disabled = true;
   button.textContent = "正在发送...";
   try {
-    const result = await api("/api/wecom/send", {
+    const result = await api(`/api/wecom/send?${buildQuery(true)}`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({person: state.person}),
+      body: JSON.stringify({person: state.person, mode, ...(mode === "selected" ? {admIds: [...state.selected]} : {})}),
     });
     showSuccess(`已发送${result.taskCount}张未结案ADM给${result.person}${result.mentioned ? "并@本人" : ""}。`);
   } catch (error) {

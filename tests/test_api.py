@@ -134,7 +134,7 @@ def test_export_returns_valid_workbook(client):
     ]
     assert sheet["L5"].value is None
     assert sheet["R5"].value in {
-        "已录入差异", "有差异单不是责任人录入", "无差异单"
+        "已录入差异", "无差异单"
     }
     assert len(sheet.data_validations.dataValidation) == 3
     assert sheet["J5"].fill.fgColor.rgb.endswith("FFF2B2")

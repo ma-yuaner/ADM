@@ -197,7 +197,7 @@ curl http://127.0.0.1:5050/api/health
 4. 按ADM单号抽查10张源表记录；
 5. 按CTRIP、QUNAR等数据源导出Excel；
 6. 审核各数据源字段和列顺序；
-7. 抽查“处理进度”：按`adm_no=order_info_diff_reason.ota_order_no`核验，并对比`actual_owner/owner`与`create_user_name`；
+7. 抽查“处理进度”：按`adm_no=order_info_diff_reason.business_ref_no`且`status=1、calculate_rate=-1`核验，不匹配订单号或人员；
 8. 切换到测试数据库账号；
 9. 开启写入；
 10. 选择一张测试ADM完成转单；

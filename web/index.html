@@ -28,6 +28,7 @@
           <span>当前查看人员</span>
           <select id="person-select" aria-label="当前查看人员"></select>
         </label>
+        <label class="field" id="wecom-send-mode-field"><span>企业微信发送范围</span><select id="wecom-send-mode"><option value="filtered">当前筛选结果（全部页）</option><option value="selected">勾选订单</option></select></label>
         <button id="wecom-send-button" class="button button-wecom" type="button" disabled>发送企业微信</button>
       </div>
     </header>
@@ -60,6 +61,7 @@
         <div class="toolbar">
           <div class="filters">
             <label class="field"><span>数据源</span><select id="source-filter"><option value="">全部数据源</option></select></label>
+            <label class="field"><span>当前阶段</span><select id="stage-filter"><option value="">全部阶段</option></select></label>
             <label class="field"><span>预警等级</span><select id="alert-filter"><option value="">全部等级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="NORMAL">正常</option></select></label>
             <label class="field"><span>创建开始日期</span><input id="created-from-filter" type="date"></label>
             <label class="field"><span>创建结束日期</span><input id="created-to-filter" type="date"></label>
@@ -73,7 +75,7 @@
         </div>
 
         <div id="selection-bar" class="selection-bar" hidden>
-          已选择 <strong id="selected-count">0</strong> 张ADM，可批量分配给同一处理人。
+          已选择 <strong id="selected-count">0</strong> 张ADM，可批量分配或通过企业微信发送勾选订单。
         </div>
         <div class="table-wrap">
           <table>

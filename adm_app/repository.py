@@ -203,9 +203,14 @@ class MySQLAdmRepository(AdmRepository):
         if filters.get("created_before"):
             params["created_before"] = filters["created_before"]
             where.append("create_time < :created_before")
+        if filters.get("adm_ids"):
+            params["adm_ids"] = filters["adm_ids"]
+            where.append("id IN :adm_ids")
 
         where_sql = " AND ".join(f"({item})" for item in where)
         sql = text(f"SELECT {TASK_COLUMNS} FROM adm_records WHERE {where_sql} ORDER BY adm_deadline IS NULL, adm_deadline, id DESC")
+        if filters.get("adm_ids"):
+            sql = sql.bindparams(bindparam("adm_ids", expanding=True))
         with self.engine.connect() as connection:
             rows = [dict(row._mapping) for row in connection.execute(sql, params)]
             if rows:
@@ -389,8 +394,8 @@ class MockAdmRepository(AdmRepository):
             self._row(107, "ADM-260909-007", "CTRIP", "26090981120", "ZH", 1320, "CNY", "李志君", "", 0, 0, now + timedelta(days=4), now - timedelta(hours=3)),
         ]
         self.finance_records = {
-            "ADM-260909-001": [{"create_user_name": "黄娜娟", "duty_person": ""}],
-            "ADM-260909-002": [{"create_user_name": "黄娜娟", "duty_person": ""}],
+            "ADM-260909-001": [{"business_ref_no": "ADM-260909-001", "calculate_rate": -1, "duty_person": ""}],
+            "ADM-260909-002": [{"business_ref_no": "ADM-260909-002", "calculate_rate": -1, "duty_person": ""}],
         }
 
     @staticmethod
@@ -428,6 +433,9 @@ class MockAdmRepository(AdmRepository):
 
     def list_tasks(self, filters: dict) -> dict:
         rows = deepcopy(self.rows)
+        if filters.get("adm_ids"):
+            wanted_ids = set(filters["adm_ids"])
+            rows = [row for row in rows if row["id"] in wanted_ids]
         person = filters["person"]
         scope = filters["scope"]
         if scope == "mine":

@@ -9,8 +9,8 @@
 - 单张快速转单、批量分配实际处理人；
 - 关联操作日志展示最近转单时间、转单前后人员、转单次数及转单后未接单状态；
 - 将筛选后的不同平台数据统一导出到一个Excel工作表；
-- 向企业微信群发送所选人员的全部未结案ADM清单并@本人；
-- 核验财务差异库，导出“已录入差异 / 有差异单不是责任人录入 / 无差异单”；
+- 向企业微信群发送当前筛选结果或勾选的ADM清单，并@当前查看人员；
+- 按ADM业务单号核验有效支出差异单，导出“已录入差异 / 无差异单”；
 - 业务在Excel末列填写恢复编码后回传，ADM专员在“编码恢复”页跟进处理；
 - 将业务回传Excel转换为ADM管理系统的完整38列导入模板；
 - 不新增业务库表，ADM读取仍复用`adm_records`和`auto_issue_operator_log`。
@@ -90,13 +90,14 @@ ADM_FINANCE_DB_DATABASE=ibf_prod_db
 财务核验的关联与责任人口径：
 
 ```text
-adm_records.adm_no = order_info_diff_reason.ota_order_no
+adm_records.adm_no = order_info_diff_reason.business_ref_no
 order_info_diff_reason.status = 1
-ADM责任人 = actual_owner非空时取actual_owner，否则取owner
-差异单录入人 = order_info_diff_reason.create_user_name
+order_info_diff_reason.calculate_rate = -1（支出）
 ```
 
-启用后的“处理进度”：存在有效差异且任一`create_user_name`与ADM责任人一致为“已录入差异”；存在有效差异但录入人均不一致为“有差异单不是责任人录入”；没有有效差异为“无差异单”。`duty_person`当前业务数据大量为空，仅作为辅助信息，不参与是否本人录入的判断。未启用时保留原有的“差异说明是否填写”默认判断。
+启用后的“处理进度”：存在业务单号匹配的有效支出差异单即为“已录入差异”，否则为“无差异单”。不再匹配OTA订单号、录入人或责任人；`duty_person`仅作为辅助信息。未启用时保留原有的“差异说明是否填写”默认判断。
+
+本规则由用户于2026-09-16在本次对话明确确认；状态：已确认；粒度：一张ADM；适用范围：本模块差异单处理进度核验；替代旧的订单号及人员匹配规则。此核验不计算金额、币种、收入或成本确认阶段。
 
 ## 数据口径
 
@@ -206,6 +207,7 @@ scope=mine|team|all
 person=人员姓名
 source=ota_code
 alert=P0|P1|P2|NORMAL
+stage=当前阶段代码（选项由/api/config返回）
 search=ADM单号、OTA订单号或票号
 createdFrom=创建开始日期（YYYY-MM-DD，包含当天）
 createdTo=创建结束日期（YYYY-MM-DD，包含当天）
@@ -228,6 +230,8 @@ pageSize=20
 ## 企业微信发送
 
 当前实现使用企业微信群机器人：先发送人员、未结案数量和提醒文字，再上传美化后的Excel，并通过企业微信user_id或手机号@所选人员。它不是一对一私聊。
+
+发送范围必须明确选择“当前筛选结果（全部页）”或“勾选订单”，使用待办页面的人员视图、数据源、阶段、预警、创建日期及搜索条件。勾选模式仅发送指定ID，不扩大到全量；订单失效、结案或移出当前筛选范围时整次停止。当前查看人员仍是被提醒的人。接口为`POST /api/wecom/send?待办筛选参数`，请求体含`person`、`mode=filtered|selected`，勾选模式另含`admIds`；单次最多10000张。
 
 服务器`.env`配置示例：
 

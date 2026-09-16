@@ -12,6 +12,7 @@ from .adm_import_converter import (
     AdmImportConverter,
     parse_recovery_info,
 )
+from .domain import STAGE_NAMES
 from .errors import AppError
 from .exporter import ExcelExportService
 from .json_utils import json_ready
@@ -79,12 +80,15 @@ def _task_filters(export: bool = False) -> dict:
     created_to = _date_filter("createdTo", "创建结束日期")
     if created_from and created_to and created_from > created_to:
         raise AppError("创建开始日期不能晚于结束日期")
+    stage = _clean_text("stage", 50)
+    if stage and (stage not in STAGE_NAMES or stage == "CLOSED"):
+        raise AppError("当前阶段筛选无效")
     return {
         "scope": _clean_text("scope", 10) or "mine",
         "person": _clean_text("person", 64),
         "source": _clean_text("source", 64),
         "alert": _clean_text("alert", 16),
-        "stage": _clean_text("stage", 50),
+        "stage": stage,
         "search": _clean_text("search", 100),
         "created_from": created_from,
         "created_before": created_to + timedelta(days=1) if created_to else None,
@@ -113,6 +117,7 @@ def config():
         "dataMode": _repository().mode,
         "writeEnabled": _repository().health()["writeEnabled"],
         "wecomEnabled": _wecom().enabled,
+        "stages": [{"code": code, "name": name} for code, name in STAGE_NAMES.items() if code != "CLOSED"],
     })
 
 
@@ -175,26 +180,34 @@ def send_wecom():
     person = str(body.get("person") or "").strip()
     if not person or len(person) > 64:
         raise AppError("person不能为空且长度不能超过64")
-    result = _repository().list_tasks({
-        "scope": "mine",
-        "person": person,
-        "source": "",
-        "alert": "",
-        "stage": "",
-        "search": "",
-        "created_from": None,
-        "created_before": None,
-        "page": 1,
-        "page_size": 10000,
-    })
+    if not _wecom().enabled:
+        raise AppError("企业微信发送尚未启用，请配置机器人Webhook和发送开关", 503)
+    mode = body.get("mode")
+    if mode not in ("filtered", "selected"):
+        raise AppError("请选择发送当前筛选结果或勾选订单")
+    filters = _task_filters(export=True)
+    selected_ids = set()
+    if mode == "selected":
+        raw_ids = body.get("admIds")
+        if not isinstance(raw_ids, list) or not 1 <= len(raw_ids) <= 10000:
+            raise AppError("勾选订单数量必须在1到10000之间")
+        if any(type(value) is not int or value <= 0 for value in raw_ids):
+            raise AppError("勾选订单ID必须为正整数")
+        selected_ids = set(raw_ids)
+        filters["adm_ids"] = sorted(selected_ids)
+    result = _repository().list_tasks(filters)
+    if result["pagination"]["total"] > 10000:
+        raise AppError("单次发送不能超过10000张ADM，请增加筛选条件")
     tasks = result["items"]
+    if selected_ids and {task["id"] for task in tasks} != selected_ids:
+        raise AppError("部分勾选订单已失效、已结案或不在当前筛选范围内，请刷新后重新选择，本次未发送")
     if not tasks:
-        raise AppError(f"{person}当前没有未结案ADM")
+        raise AppError("当前筛选范围没有未结案ADM，本次未发送")
     exporter = ExcelExportService(current_app.config["EXPORT_PROFILES_FILE"])
     workbook = exporter.build(
         tasks,
         title=f"{person}—ADM未结案订单核实清单",
-        subtitle=f"共{len(tasks)}张｜请核实订单归属、差异及申诉进度",
+        subtitle=f"共{len(tasks)}张｜{'勾选订单' if mode == 'selected' else '当前筛选结果'}｜请核实订单归属、差异及申诉进度",
     )
     filename = f"ADM未结案核实_{person}_{datetime.now():%Y%m%d_%H%M}.xlsx"
     return _success(
