@@ -176,7 +176,7 @@
           <div class="conversion-upload">
             <div class="upload-icon" aria-hidden="true">XLSX</div>
             <h3>选择业务填写后的工作台Excel</h3>
-            <p>只支持.xlsx，单次最多10,000张ADM。发现缺失ADM、重复冲突或字段超长时将停止生成并明确提示。</p>
+            <p>只支持.xlsx，单次最多10,000张ADM。不校验订单号；同一ADM存在多条数据时按平台和航司组合识别，无法唯一定位时停止并明确提示。</p>
             <input id="import-convert-file" class="visually-hidden" type="file" accept=".xlsx">
             <button id="import-convert-button" class="button button-primary" type="button">选择文件并转换</button>
             <span id="import-convert-result" class="toolbar-note"></span>

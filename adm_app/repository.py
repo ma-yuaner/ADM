@@ -119,7 +119,7 @@ class AdmRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, list[dict]]:
         raise NotImplementedError
 
 
@@ -359,7 +359,7 @@ class MySQLAdmRepository(AdmRepository):
             ]
         return {task["admNo"]: task for task in (serialize_task(row) for row in rows)}
 
-    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, list[dict]]:
         normalized = list(dict.fromkeys(value.strip() for value in adm_numbers if value.strip()))
         if not normalized:
             return {}
@@ -376,7 +376,10 @@ class MySQLAdmRepository(AdmRepository):
                     dict(row._mapping)
                     for row in connection.execute(sql, {"adm_numbers": batch})
                 )
-        return {str(row["adm_no"]).strip(): row for row in rows}
+        grouped: dict[str, list[dict]] = {}
+        for row in rows:
+            grouped.setdefault(str(row["adm_no"]).strip(), []).append(row)
+        return grouped
 
 
 class MockAdmRepository(AdmRepository):
@@ -512,13 +515,14 @@ class MockAdmRepository(AdmRepository):
             if task["admNo"] in wanted
         }
 
-    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, dict]:
+    def find_import_rows_by_adm_numbers(self, adm_numbers: list[str]) -> dict[str, list[dict]]:
         wanted = {value.strip() for value in adm_numbers if value.strip()}
-        return {
-            str(row["adm_no"]).strip(): deepcopy(row)
-            for row in self.rows
-            if str(row.get("adm_no") or "").strip() in wanted and row.get("status") == 1
-        }
+        grouped: dict[str, list[dict]] = {}
+        for row in self.rows:
+            adm_no = str(row.get("adm_no") or "").strip()
+            if adm_no in wanted and row.get("status") == 1:
+                grouped.setdefault(adm_no, []).append(deepcopy(row))
+        return grouped
 
 
 def _repo_engine(project_dir: Path) -> Engine:

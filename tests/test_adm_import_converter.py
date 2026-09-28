@@ -1,3 +1,4 @@
+from copy import deepcopy
 from io import BytesIO
 
 from openpyxl import load_workbook
@@ -21,6 +22,23 @@ def _set_business_values(workbook, adm_no: str, values: dict[str, object]):
                 sheet.cell(row_number, headers[label]).value = value
             return
     raise AssertionError(f"未找到{adm_no}")
+
+
+def _set_business_values_for_combo(
+    workbook, adm_no: str, platform: str, airline: str, values: dict[str, object]
+):
+    sheet = workbook["ADM待处理"]
+    headers = {cell.value: cell.column for cell in sheet[4]}
+    for row_number in range(5, sheet.max_row + 1):
+        if (
+            str(sheet.cell(row_number, headers["ADM单号"]).value) == adm_no
+            and str(sheet.cell(row_number, headers["平台"]).value) == platform
+            and str(sheet.cell(row_number, headers["航司"]).value) == airline
+        ):
+            for label, value in values.items():
+                sheet.cell(row_number, headers[label]).value = value
+            return
+    raise AssertionError(f"未找到{adm_no}/{platform}/{airline}")
 
 
 def _post_workbook(client, workbook):
@@ -211,6 +229,69 @@ def test_missing_adm_stops_conversion(client):
     response = _post_workbook(client, workbook)
     assert response.status_code == 400
     assert "数据库中未找到有效ADM" in response.get_json()["message"]
+
+
+def test_conversion_ignores_order_number_column(client):
+    workbook = _business_workbook(client)
+    sheet = workbook["ADM待处理"]
+    order_column = sheet.max_column + 1
+    sheet.cell(4, order_column, "OTA订单号")
+    sheet.cell(5, order_column, "故意填写不同订单号")
+
+    response = _post_workbook(client, workbook)
+    output, sheet, row_number, headers = _converted_row(response, "ADM-260909-001")
+    assert sheet.cell(row_number, headers["OTA订单号"]).value == "26090981021"
+    output.close()
+
+
+def test_same_adm_uses_platform_and_airline_combination_not_order_number(client, repository):
+    second = deepcopy(repository.rows[0])
+    second.update({"id": 201, "ota_code": "QUNAR", "airline": "SQ", "ota_order_no": "DIFFERENT-ORDER"})
+    repository.rows.append(second)
+    workbook = _business_workbook(client, "scope=team&person=黄娜娟")
+    _set_business_values_for_combo(
+        workbook, "ADM-260909-001", "CTRIP", "MU", {"差异说明": "携程组合"}
+    )
+    _set_business_values_for_combo(
+        workbook, "ADM-260909-001", "QUNAR", "SQ", {"差异说明": "去哪儿组合"}
+    )
+
+    response = _post_workbook(client, workbook)
+    assert response.status_code == 200
+    output = load_workbook(BytesIO(response.data), data_only=True)
+    sheet = output.active
+    headers = {cell.value: cell.column for cell in sheet[1]}
+    matches = [
+        row for row in range(2, sheet.max_row + 1)
+        if sheet.cell(row, headers["ADM单号（业务唯一标识）"]).value == "ADM-260909-001"
+    ]
+    assert len(matches) == 2
+    results = {
+        sheet.cell(row, headers["OTA平台"]).value: (
+            sheet.cell(row, headers["OTA订单号"]).value,
+            sheet.cell(row, headers["航司（多个逗号隔开）"]).value,
+            sheet.cell(row, headers["细分差异原因（可备注，自由文本描述具体差异情况）"]).value,
+        )
+        for row in matches
+    }
+    assert results == {
+        "CTRIP": ("26090981021", "MU", "携程组合"),
+        "QUNAR": ("DIFFERENT-ORDER", "SQ", "去哪儿组合"),
+    }
+    output.close()
+
+
+def test_ambiguous_platform_airline_combination_stops_conversion(client, repository):
+    duplicate = deepcopy(repository.rows[0])
+    duplicate.update({"id": 202, "ota_order_no": "ANOTHER-ORDER"})
+    repository.rows.append(duplicate)
+    workbook = _business_workbook(client)
+
+    response = _post_workbook(client, workbook)
+    assert response.status_code == 400
+    message = response.get_json()["message"]
+    assert "平台“CTRIP”和航司“MU”组合仍对应多条数据" in message
+    assert "不校验订单号" in message
 
 
 def test_existing_long_remark_is_preserved(client, repository):

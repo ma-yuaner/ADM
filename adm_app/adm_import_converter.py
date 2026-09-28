@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from io import BytesIO
@@ -145,8 +146,22 @@ def _enum_name(value, names: dict[int, str]) -> str:
 class WorkbenchRow:
     row_number: int
     adm_no: str
+    platform: str
+    airline: str
     values: dict[str, str]
     context: dict[str, str]
+
+
+def _normalized_text(value) -> str:
+    return _excel_text(value).upper()
+
+
+def _normalized_airlines(value) -> tuple[str, ...]:
+    return tuple(sorted({
+        token.strip().upper()
+        for token in re.split(r"[,，、/;；]+", _excel_text(value))
+        if token.strip()
+    }))
 
 
 class AdmImportConverter:
@@ -184,6 +199,17 @@ class AdmImportConverter:
                     if any(_excel_text(value) for value in row):
                         raise AppError(f"第{row_number}行存在内容但ADM单号为空")
                     continue
+
+                platform = _excel_text(
+                    row[header_map["平台"]]
+                    if "平台" in header_map and header_map["平台"] < len(row)
+                    else None
+                )
+                airline = _excel_text(
+                    row[header_map["航司"]]
+                    if "航司" in header_map and header_map["航司"] < len(row)
+                    else None
+                )
 
                 values = {
                     key: _excel_text(row[header_map[label]] if label in header_map and header_map[label] < len(row) else None)
@@ -235,15 +261,16 @@ class AdmImportConverter:
                     context["恢复编码"] = recovery_info.recovery_code
                 if values["appeal_reason"]:
                     context["申诉原因"] = values["appeal_reason"]
-                parsed = WorkbenchRow(row_number, adm_no, values, context)
-                if adm_no in seen:
-                    previous = seen[adm_no]
+                parsed = WorkbenchRow(row_number, adm_no, platform, airline, values, context)
+                identity = f"{adm_no}\0{_normalized_text(platform)}\0{_normalized_airlines(airline)}"
+                if identity in seen:
+                    previous = seen[identity]
                     if previous.values != parsed.values or previous.context != parsed.context:
                         raise AppError(
-                            f"ADM {adm_no}在第{previous.row_number}行和第{row_number}行存在不同内容，请只保留一行"
+                            f"ADM {adm_no}相同平台和航司在第{previous.row_number}行和第{row_number}行存在不同内容，请只保留一行"
                         )
                     continue
-                seen[adm_no] = parsed
+                seen[identity] = parsed
                 rows.append(parsed)
 
             if not rows:
@@ -257,23 +284,49 @@ class AdmImportConverter:
     def convert(
         self,
         rows: Iterable[WorkbenchRow],
-        source_rows: dict[str, dict],
+        source_rows: dict[str, list[dict] | dict],
         recovery_rows: dict[str, dict] | None = None,
     ) -> BytesIO:
         parsed_rows = list(rows)
-        missing = [row.adm_no for row in parsed_rows if row.adm_no not in source_rows]
+        missing = [row.adm_no for row in parsed_rows if not source_rows.get(row.adm_no)]
         if missing:
             preview = "、".join(missing[:20])
             suffix = f"等{len(missing)}张" if len(missing) > 20 else ""
             raise AppError(f"数据库中未找到有效ADM：{preview}{suffix}，本次未生成导入文件")
 
         tracked = recovery_rows or {}
-        output_rows = [
-            self._merge_row(row, source_rows[row.adm_no], tracked.get(row.adm_no))
-            for row in parsed_rows
-        ]
+        output_rows = []
+        for row in parsed_rows:
+            raw_candidates = source_rows[row.adm_no]
+            candidates = raw_candidates if isinstance(raw_candidates, list) else [raw_candidates]
+            source = self._select_source(row, candidates)
+            output_rows.append(self._merge_row(row, source, tracked.get(row.adm_no)))
         self._validate_rows(output_rows)
         return self._build_workbook(output_rows)
+
+    @staticmethod
+    def _select_source(workbench: WorkbenchRow, candidates: list[dict]) -> dict:
+        if len(candidates) == 1:
+            return candidates[0]
+
+        matches = [
+            source for source in candidates
+            if _normalized_text(source.get("ota_code")) == _normalized_text(workbench.platform)
+            and _normalized_airlines(source.get("airline")) == _normalized_airlines(workbench.airline)
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if not workbench.platform or not workbench.airline:
+            raise AppError(
+                f"第{workbench.row_number}行ADM {workbench.adm_no}对应多条数据，请保留平台和航司用于组合识别；不校验订单号"
+            )
+        if not matches:
+            raise AppError(
+                f"第{workbench.row_number}行ADM {workbench.adm_no}未找到平台“{workbench.platform}”和航司“{workbench.airline}”的组合；不校验订单号"
+            )
+        raise AppError(
+            f"第{workbench.row_number}行ADM {workbench.adm_no}的平台“{workbench.platform}”和航司“{workbench.airline}”组合仍对应多条数据，无法安全转换；不校验订单号"
+        )
 
     @staticmethod
     def _submission_status_from_source(source: dict) -> str:
